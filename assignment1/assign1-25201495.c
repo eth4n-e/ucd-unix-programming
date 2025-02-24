@@ -43,26 +43,54 @@ void print_usage(const char *program_name) {
 }
 
 void head(FILE *input, int num_lines, bool even) {
+    // using an array of pointers to store lines
+    // allows me to receive all of users input before printing in case of stdin
+    char **lines = malloc(num_lines * sizeof(char *));
+    if(!lines) {
+        perror("Memory allocation failed");
+        return;
+    }    
+
     char *line = NULL;
     size_t len = 0;
     ssize_t read;
     int count = 0;
     int curr_lin = 1; // use curr_lin like a pointer to current line
-    
+   
+    if (input == stdin) {
+        printf("Input up to %d lines to stdin: \n", num_lines);
+    }
+ 
     while (count < num_lines && (read = getline(&line, &len, input)) != -1) {
-        // print even lines if specified otherwise each line  
+       // print even lines if specified otherwise each line  
         if (even) {
             if ((curr_lin % 2) == 0) {
-                printf("%s", line);
+                lines[count] = strdup(line);
+                if(!lines[count]) {
+                    perror("Memory allocation failed");
+                    break;
+                }
                 count++;
             }
-            curr_lin += 1;
         } else {
-            printf("%s", line);
-            curr_lin += 1;
+            lines[count] = strdup(line);
+            if(!lines[count]) {
+                perror("Memory allocation failed");
+                break;
+            }
             count++;
-        }    
+        }     
+        curr_lin += 1;
     }
+        
+    printf("\nOutput: \n");
+    for (int i = 0; i < count; i++) {
+        printf("%s", lines[i]);
+        // free memory of pointer to a specific line
+        free(lines[i]);
+    }
+    // free memory storing array of char*
+    free(lines);
 }
 
 int main(int argc, char *argv[]) {
@@ -105,12 +133,9 @@ int main(int argc, char *argv[]) {
                 break;
             case 'n': {
                 // option n comes with argument
-                printf("optarg: %s\n", optarg);
                 int arg = atoi(optarg);
-                printf("arg: %d\n", arg);
                 if (arg >= 0) {
                     num_lines = arg;
-                    printf("num_lines: %d\n", num_lines);
                 }
                 break;
             }
