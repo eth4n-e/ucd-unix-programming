@@ -11,9 +11,18 @@ EMAIL: ethan.epperson@ucdconnect.ie
 
 PROGRAM DESCRIPTION
 - Program implements head and even functionality
+- Prints the number of specified lines from a provided file (default: 10)
+- Prints even lines within a file if specified
+- If no file is provided, user is prompted to input to stdin where the number of lines specified
+- will be printed
 
 SUCCESS OF PROGRAM
-- 
+- The program successfully implements the commands -n, -V, -h, and -e 
+- I believe the program works completely but in terms of implementing reading from stdin
+- I am not sure if I was meant to implement it such that if no file is provided on the command line
+- that the user could input text that would be printed
+- my implementation prints a message indicating to the user that the program is waiting for input from 
+- stdin to which the user can begin entering text. This of course takes place while the program is running
 */
 
 // create structs for: version info, set of options
@@ -58,28 +67,24 @@ void head(FILE *input, int num_lines, bool even) {
     int curr_lin = 1; // use curr_lin like a pointer to current line
    
     if (input == stdin) {
-        printf("Input up to %d lines to stdin: \n", num_lines);
+        printf("Input lines to stdin: \n");
     }
  
     while (count < num_lines && (read = getline(&line, &len, input)) != -1) {
-       // print even lines if specified otherwise each line  
-        if (even) {
-            if ((curr_lin % 2) == 0) {
-                lines[count] = strdup(line);
-                if(!lines[count]) {
-                    perror("Memory allocation failed");
-                    break;
-                }
-                count++;
-            }
-        } else {
+        // print even lines if specified otherwise each line  
+        // when even flag, will only enter when curr_lin is even
+        if(!even || (curr_lin % 2) == 0) {
+            // essentially we want to store the line and not the mem address of the line
+            // without duplicating, lines[*] would all point to mem address of line
+            // and line is overwritten each time
             lines[count] = strdup(line);
-            if(!lines[count]) {
+            if (!lines[count]) {
                 perror("Memory allocation failed");
-                break;
+                break;      
             }
             count++;
-        }     
+        }
+        // move to next line
         curr_lin += 1;
     }
         
