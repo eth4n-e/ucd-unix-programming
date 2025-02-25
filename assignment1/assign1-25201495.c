@@ -10,19 +10,23 @@ STUDENT-NUMBER: 25201495
 EMAIL: ethan.epperson@ucdconnect.ie
 
 PROGRAM DESCRIPTION
-- Program implements head and even functionality
+- Program implements head functionality with both even and odd as options
 - Prints the number of specified lines from a provided file (default: 10)
 - Prints even lines within a file if specified
-- If no file is provided, user is prompted to input to stdin where the number of lines specified
-- will be printed
+- Prints odd lines within a file if specified
+- If both even or odd passed, the second option takes precedence
+- If no file is provided, user is prompted to input to stdin where 
+- the number of lines specified will be printed
 
 SUCCESS OF PROGRAM
-- The program successfully implements the commands -n, -V, -h, and -e 
+- The program successfully implements the commands -n, -V, -h, -o, and -e 
 - I believe the program works completely but in terms of implementing reading from stdin
 - I am not sure if I was meant to implement it such that if no file is provided on the command line
 - that the user could input text that would be printed
 - my implementation prints a message indicating to the user that the program is waiting for input from 
 - stdin to which the user can begin entering text. This of course takes place while the program is running
+- I also choose to implement the program such that head is not passed an argument because I find it
+- redundant in that I would always skip that argument.
 */
 
 // create structs for: version info, set of options
@@ -48,10 +52,11 @@ void print_usage(const char *program_name) {
     printf("    -V          Output version info\n");
     printf("    -h          Display usage\n");
     printf("    -e          Print even lines\n");
+    printf("    -o          Print odd lines\n");
     return;
 }
 
-void head(FILE *input, int num_lines, bool even) {
+void head(FILE *input, int num_lines, bool *even) {
     // using an array of pointers to store lines
     // allows me to receive all of users input before printing in case of stdin
     char **lines = malloc(num_lines * sizeof(char *));
@@ -71,9 +76,12 @@ void head(FILE *input, int num_lines, bool even) {
     }
  
     while (count < num_lines && (read = getline(&line, &len, input)) != -1) {
-        // print even lines if specified otherwise each line  
-        // when even flag, will only enter when curr_lin is even
-        if(!even || (curr_lin % 2) == 0) {
+        // check if even flag has been set first, if it is null we store lines normally
+        // if even flag set and on an even line, store
+        // if odd flag set and on odd line, store
+        if (even == NULL ||
+            (*even && (curr_lin % 2) == 0) ||
+            (!*even && (curr_lin % 2) == 1)) {  
             // essentially we want to store the line and not the mem address of the line
             // without duplicating, lines[*] would all point to mem address of line
             // and line is overwritten each time
@@ -84,11 +92,15 @@ void head(FILE *input, int num_lines, bool even) {
             }
             count++;
         }
+        
         // move to next line
         curr_lin += 1;
     }
-        
-    printf("\nOutput: \n");
+     
+    if (input == stdin) {
+        printf("\nOutput: \n");
+    }
+    
     for (int i = 0; i < count; i++) {
         printf("%s", lines[i]);
         // free memory of pointer to a specific line
@@ -107,8 +119,10 @@ int main(int argc, char *argv[]) {
     FILE *input;
     // defaults for head program
     int num_lines = 10;
-    bool print_even = false;    
-
+    // use bool pointer to account for 3 values: NULL, true, false
+    // if even / odd passed, can use a var to store value and update bool pointer
+    bool *print_even = NULL;    
+    bool print_even_val;
     // if a file is passed to the program it will be the final argument
     input = fopen(argv[argc - 1], "r");
     if (input == NULL) { // if unable to open file, file was not passed and should read from stdin
@@ -120,7 +134,7 @@ int main(int argc, char *argv[]) {
     // these cannot be handled by char as values may lie outside normal range of ASCII characters
     int opt;
     
-    while((opt = getopt(argc, argv, "hVen:")) != -1) {
+    while((opt = getopt(argc, argv, "hVeon:")) != -1) {
         switch(opt) {
             case 'h':
                 // display all options
@@ -134,7 +148,13 @@ int main(int argc, char *argv[]) {
                 break;
             case 'e':
                 // print even lines
-                print_even = true;
+                print_even_val = true;
+                print_even = &print_even_val;
+                break;
+            case 'o':
+                // print odd lines
+                print_even_val = false;
+                print_even = &print_even_val;
                 break;
             case 'n': {
                 // option n comes with argument
