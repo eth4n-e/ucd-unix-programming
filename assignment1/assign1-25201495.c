@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -115,8 +116,17 @@ int main(int argc, char *argv[]) {
         return 0;
     }
 
-    if (argv[1] != "head") {
-        printf("Program only implements head functionality");
+    const char *prog_purpose = "head";
+    char *secondArg = argv[1];
+    // convert arg we will compare to lower case
+    // allows for more variability in input
+    // e.g ./prog_name hEaD or /prog_name HEAD
+    for (int i = 0; secondArg[i]; i++) {
+        secondArg[i] = tolower(secondArg[i]);
+    }
+
+    if (strcmp(prog_purpose, secondArg) != 0) {
+        printf("Second argument to program must be a variant of head\n");
         return 0;
     }     
 
