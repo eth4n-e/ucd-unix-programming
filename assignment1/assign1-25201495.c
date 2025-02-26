@@ -25,8 +25,6 @@ SUCCESS OF PROGRAM
 - that the user could input text that would be printed
 - my implementation prints a message indicating to the user that the program is waiting for input from 
 - stdin to which the user can begin entering text. This of course takes place while the program is running
-- I also choose to implement the program such that head is not passed an argument because I find it
-- redundant in that I would always skip that argument.
 */
 
 // create structs for: version info, set of options
@@ -46,7 +44,7 @@ void print_version_info() {
 }
 
 void print_usage(const char *program_name) {
-    printf("Usage: %s [options] ... [file]\n", program_name);
+    printf("Usage: %s head [options] ... [file]\n", program_name);
     printf("Options:\n");
     printf("    -n K        Output first K lines\n"); 
     printf("    -V          Output version info\n");
@@ -116,6 +114,12 @@ int main(int argc, char *argv[]) {
         print_usage(prog_name);
         return 0;
     }
+
+    if (argv[1] != "head") {
+        printf("Program only implements head functionality");
+        return 0;
+    }     
+
     FILE *input;
     // defaults for head program
     int num_lines = 10;
@@ -129,6 +133,12 @@ int main(int argc, char *argv[]) {
         input = stdin;
     }
 
+
+    // move argv forward, by default getopt processes argv[1] but this must be "head"
+    // arguments following will be options for the program that need to be processed
+    // decrement argc because we have one less arg after accounting for "head"
+    argv += 1;
+    argc -= 1;
     // opt is an int to account for all values that can be returned by getopt
     // getopt can return -1 when all options processed, : when option missing argument, etc.
     // these cannot be handled by char as values may lie outside normal range of ASCII characters
