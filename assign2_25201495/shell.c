@@ -31,6 +31,36 @@ int main (int argc, char **argv) {
         printf("%s", prompt);
         fflush(stdout);    
 
+        read = getline(&line, &len, input);
+        char *command;
+        char **args = malloc(sizeof(char*));
+        int count = 0;
+        // getline returns -1 on EOF or error
+        if (read == -1) {
+            printf("\nEOF received, exiting process\n");
+            exit(0);
+        } else {
+            // strcspn finds index of first occurrence of \n, otherwise returns length of string
+            // if \n exists, replace that character with 0 or null terminator to end string
+            line[strcspn(line, "\n")] = 0;
+            // strtok parses inputted string, delimited by 2nd arg into tokens
+            char *token = strtok(line, " ");
+            // store each argument in line
+            while(token != NULL) {
+                args[count] = token;
+                count++;
+                args = realloc(args, (count + 1) * sizeof(char*));
+                token = strtok(NULL, " ");
+            }
+            count++;
+            // add an extra slot to hold a char*
+            args = realloc(args, (count + 1) * sizeof(char*));
+            // insert NULL into extra slot, execvp expects NULL terminated array of character pointers
+            // NULL pointer tells execvp when to stop reading arguments
+            args[count] = NULL;
+            command = args[0];
+        }
+
         // variables for process management
         pid_t child_pid;
         int child_status;
@@ -40,44 +70,15 @@ int main (int argc, char **argv) {
     
         // 0 is returned to child processes
         if (child_pid == 0) {
-            // execute command receive
-            // execvp(command, parsed_arguments)
             // prevent the child process from executing before prompt
             // sleep(5);
-            read = getline(&line, &len, input);
-            char *command;
-            char **args = malloc(sizeof(char*));
-            int count = 0;
-            // getline returns -1 on EOF or error
-            if (read != -1) {
-                // strcspn finds index of first occurrence of \n, otherwise returns length of string
-                // if \n exists, replace that character with 0 or null terminator to end string
-                line[strcspn(line, "\n")] = 0;
-                // strtok parses inputted string, delimited by 2nd arg into tokens
-                char *token = strtok(line, " ");
-                while(token != NULL) {
-                    args[count] = token;
-                    count++;
-                    args = realloc(args, (count + 1) * sizeof(char*));
-                    token = strtok(NULL, " ");
-                }
-                count++;
-                // add an extra slot to hold a char*
-                args = realloc(args, (count + 1) * sizeof(char*));
-                // insert NULL into extra slot, execvp expects NULL terminated array of character pointers
-                // NULL pointer tells execvp when to stop reading arguments
-                args[count] = NULL;
-                command = args[0];
-                execvp(command, args);
-            }
-            printf("Unknown command\n");
+            execvp(command, args);
+            printf("Error: unknown command\n");
             exit(0);
         } else {
             // parent process
             // should wait for command to finish (child process) before prompting for next command
             wait(&child_status);
-            printf("%s", prompt);
-            fflush(stdout);    
         }
     }
 
