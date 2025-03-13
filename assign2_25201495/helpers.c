@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <stddef.h>
 #define DATE_SIZE 12
 
 /*
@@ -88,21 +90,29 @@ void execute_chdir(char **args) {
         // const char * is pointer to an immutable string
         const char *home = "HOME";
         // search for "HOME" env var
-        path = getenv(name);
+        path = getenv(home);
         if (path) {
+            printf("Path: %s", path);
+            fflush(stdout);
             result = chdir(path);
+            printf("Result: %d\n", result);
+            fflush(stdout);
         } else {
-            perror("Environment variable %s does not exist!", home);
+            perror("Unable to find environment variable");
         }
         return;
     } else {
         path = args[1];
+        printf("Path: %s\n", path);
+        fflush(stdout);
         result = chdir(path);
+        printf("Result: %d\n", result);
+        fflush(stdout);
     } 
 
     // chdir returns -1 on failure
     if (result == -1) {
-        perror("chdir() failed\n");
+        perror("Unable to change directory");
     }
 
 }

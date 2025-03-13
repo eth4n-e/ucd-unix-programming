@@ -44,6 +44,15 @@ int main (int argc, char **argv) {
         } else {
             args = parse_and_store_tokens(line);
             command = args[0];
+            // check for cd in parent process
+            // cd is a shell built-in not an external executable program
+            // running in child process would fail as directory changes
+            //  would only be reflected in that process
+            if (strcmp("cd", command) == 0) {
+                printf("In change directory block");
+                fflush(stdout);
+                execute_chdir(args);
+            }
         }
 
         // variables for process management
@@ -55,13 +64,7 @@ int main (int argc, char **argv) {
     
         // 0 is returned to child processes
         if (child_pid == 0) {
-            // check for cd as execvp cannot properly execute cd as child process would be altered
-            // while parent process unchanged
-            if (strcmp("cd", command) == 0 ) {
-                execute_chdir(args);
-            } else {
-                execvp(command, args);
-            }
+            execvp(command, args);
             printf("Error: unknown command\n");
             exit(0);
         } else {
