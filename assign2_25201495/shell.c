@@ -3,6 +3,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <signal.h>
+#include "helpers.h"
+#include "signal_handlers.h"
 
 /*
 Name: Ethan Epperson
@@ -16,9 +19,9 @@ Email: ethan.epperson@ucdconnect.ie
 - the other c source file should be for the main program
 */
 
-static char* prompt = "# ";
-
 int main (int argc, char **argv) {
+    setup_signal_handlers();
+
     FILE *input = stdin;
     // to store inputted line
     char *line = NULL;
@@ -28,36 +31,18 @@ int main (int argc, char **argv) {
     ssize_t read;
     while(1) {
         // print prompt before child process created
-        printf("%s", prompt);
+        display_prompt();
         fflush(stdout);    
 
         read = getline(&line, &len, input);
         char *command;
-        char **args = malloc(sizeof(char*));
-        int count = 0;
+        char **args;
         // getline returns -1 on EOF or error
         if (read == -1) {
             printf("\nEOF received, exiting process\n");
             exit(0);
         } else {
-            // strcspn finds index of first occurrence of \n, otherwise returns length of string
-            // if \n exists, replace that character with 0 or null terminator to end string
-            line[strcspn(line, "\n")] = 0;
-            // strtok parses inputted string, delimited by 2nd arg into tokens
-            char *token = strtok(line, " ");
-            // store each argument in line
-            while(token != NULL) {
-                args[count] = token;
-                count++;
-                args = realloc(args, (count + 1) * sizeof(char*));
-                token = strtok(NULL, " ");
-            }
-            count++;
-            // add an extra slot to hold a char*
-            args = realloc(args, (count + 1) * sizeof(char*));
-            // insert NULL into extra slot, execvp expects NULL terminated array of character pointers
-            // NULL pointer tells execvp when to stop reading arguments
-            args[count] = NULL;
+            args = parse_and_store_tokens(line);
             command = args[0];
         }
 
@@ -70,14 +55,18 @@ int main (int argc, char **argv) {
     
         // 0 is returned to child processes
         if (child_pid == 0) {
-            // prevent the child process from executing before prompt
-            // sleep(5);
-            execvp(command, args);
+            // check for cd as execvp cannot properly execute cd as child process would be altered
+            // while parent process unchanged
+            if (strcmp("cd", command) == 0 ) {
+                execute_chdir(args);
+            } else {
+                execvp(command, args);
+            }
             printf("Error: unknown command\n");
             exit(0);
         } else {
             // parent process
-            // should wait for command to finish (child process) before prompting for next command
+            // wait for command to finish (child process) before prompting for next command
             wait(&child_status);
         }
     }
