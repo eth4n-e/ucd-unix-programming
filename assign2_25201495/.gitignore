@@ -1,0 +1,16 @@
+# Ignore build artifacts and intermediate files
+autom4te.cache/
+config.log
+config.status
+Makefile.in
+Makefile
+*.o
+*.a
+*.so
+
+# Ignore generated scripts and files
+/configure
+/dependency-file
+/missing
+/depcomp
+/install-sh
