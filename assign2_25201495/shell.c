@@ -39,7 +39,7 @@ int main (int argc, char **argv) {
         char **args;
         // getline returns -1 on EOF or error
         if (read == -1) {
-            printf("\nEOF received, exiting process\n");
+            printf("\nEOF received, exiting process.\n");
             exit(0);
         } else {
             args = parse_and_store_tokens(line);
@@ -49,7 +49,7 @@ int main (int argc, char **argv) {
             // running in child process would fail as directory changes
             //  would only be reflected in that process
             if (strcmp("cd", command) == 0) {
-                printf("In change directory block");
+                printf("In change directory block\n");
                 fflush(stdout);
                 execute_chdir(args);
             }

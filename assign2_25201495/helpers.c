@@ -87,18 +87,16 @@ void execute_chdir(char **args) {
     if (arg_size < 2) {
         // change to path given by env variable HOME if no path specified
         // cd called without a path does nothing in bash
-        // const char * is pointer to an immutable string
-        const char *home = "HOME";
         // search for "HOME" env var
-        path = getenv(home);
+        path = getenv("HOME");
         if (path) {
-            printf("Path: %s", path);
+            printf("Path: %s\n", path);
             fflush(stdout);
             result = chdir(path);
             printf("Result: %d\n", result);
             fflush(stdout);
         } else {
-            perror("Unable to find environment variable");
+            perror("Unable to find HOME environment variable");
         }
         return;
     } else {
@@ -114,5 +112,4 @@ void execute_chdir(char **args) {
     if (result == -1) {
         perror("Unable to change directory");
     }
-
 }
