@@ -6,8 +6,20 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <errno.h>
-#define BUFSIZE 16           /* Max message size */
-#define BACKLOG 10           /* Pending connection limit */
+#include "utils.h"
+#include "quizdb.h"
+#define WRITE_BUFSIZE 512          /* General write message size */
+#define READ_BUFSIZE 16            /* Max read message size */
+#define BACKLOG 10                 /* Pending connection limit */
+
+// static limits scope to containing file, const for immutability
+static const char *preamble =
+    "Welcome to Unix Programming Quiz!\n"
+    "The quiz comprises five questions posed you one after the other.\n"
+    "You have only one attempt to answer a question.\n"
+    "Your final score will be sent you after conclusion of the quiz.\n"
+    "To start the quiz, press Y and <enter>.\n"
+    "To quit the quiz, press q and <enter>.\n";
 
 int main (int argc, char** argv) {
     if (argc != 3) {
@@ -67,63 +79,38 @@ int main (int argc, char** argv) {
         // listening socket (listen_fd) remains open to accept incoming connections
         // client_addr & addr_len return address of peer socket (one invoking connect - client)
         int connect_fd = accept(listen_fd, (struct sockaddr*)&client_addr, &addr_len);
+
         if (connect_fd == -1) {
             fprintf(stderr, "accept() error.\n");
         }
-        {  
-            // obtain the client's address
-            // code block limits scope of host, service (only needed for print)
-            char host[NI_MAXHOST];
-            char service[NI_MAXSERV];
-            // getnaminfo is a library function
-            // uses socket address structure (client_addr) to find corresponding host / service name
-            if(getnameinfo((struct sockaddr*) &client_addr, addr_len, 
-                host, NI_MAXHOST, service, NI_MAXSERV, 0) == 0) {
-                fprintf(stdout, "Connection from (%s, %s)\n", host, service);
 
-            } else {
-                fprintf(stderr, "Connection from (?UNKNOWN?)");
-            }
-        } 
-        // write quiz questions to client
-        char outbuf[BUFSIZE];
-        size_t totWritten;
-        const char* bufw = outbuf;
-        // loop ensures write of BUFSIZE
-        for (totWritten = 0; totWritten < BUFSIZE; ) {
-            // attempt to write entirety of remaining buffer (stored in bufw)
-            // write may transfer fewer bytes than requested
-            ssize_t numWritten = write(connect_fd, bufw, BUFSIZE - totWritten);
-            if (numWritten <= 0) {
-                if (numWritten == -1 && errno == EINTR)
-                    continue;
-                else {
-                    fprintf(stderr, "Write error.\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-            totWritten += numWritten;
-            bufw += numWritten;
+        // display client address
+        display_client_addr((struct sockaddr*)&client_addr, addr_len);
+
+        /* TO-DO:
+        - begin quiz with preamble statement
+        - wait for client input
+            - start quiz if client sends Y, else close connection
+        - loop
+            - server issues five quiz questions
+            - for each question
+                - send right answer if client correct
+                - indicate to client they are wrong if incorrect and send right answer
+        - conclusion of quiz
+            - send quiz results to client
+            - close connection and serve next client
+        */
+        // write preamble to socket, handle invalid buffer size
+        if (write_to_client(connect_fd, preamble, strlen(preamble)) == -1) {
+            fprintf(stderr, "Invalid buffer size for write.\n");
+            exit(EXIT_FAILURE);
         }
+
+        // write quiz questions to client
         // read responses from client
-        char inbuf[BUFSIZE];
-        size_t totRead;
-        char* bufr = inbuf;
-        // loop ensures read of BUFSIZE bytes
-        for (totRead = 0; totRead < BUFSIZE; ) {
-            // read() may read fewer bytes than requested
-            ssize_t numRead = read(connect_fd, bufr, BUFSIZE - totRead);
-            if (numRead == 0)
-                break;
-            if (numRead == -1) {
-                if (errno == EINTR)
-                    continue;
-                else {
-                    fprintf(stderr, "Read error.\n");
-                }
-            }
-            totRead += numRead;
-            bufr += numRead;
+        if (read_from_client(connect_fd, READ_BUFSIZE) == -1) {
+            fprintf(stderr, "Invalid buffer size for read.\n");
+            exit(EXIT_FAILURE);
         }
         // close connection socket        
         if (close(connect_fd) == -1) {
