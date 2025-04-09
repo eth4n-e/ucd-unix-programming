@@ -25,7 +25,7 @@ void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
     }
 }
 
-int write_to_client(int connect_fd, const char* msg, int buf_size) {
+int write_to_socket(int connect_fd, char* msg, int buf_size) {
     if (buf_size <= 0) {
        errno = EINVAL;
        return -1;
@@ -35,7 +35,7 @@ int write_to_client(int connect_fd, const char* msg, int buf_size) {
     // store message to write in temporary pointer
     // allows us to modify position of bufw (bufw += numWritten)
     // w/o losing reference to start of msg
-    const char* bufw = msg;
+    char* bufw = msg;
      
     // loop ensures write of buf_size
     for (totWritten = 0; totWritten < buf_size; ) {
@@ -58,10 +58,10 @@ int write_to_client(int connect_fd, const char* msg, int buf_size) {
     return 0;
 }
 
-int read_from_client(int connect_fd, int buf_size) {
+char* read_from_socket(int connect_fd, int buf_size) {
     if (buf_size <= 0) {
         errno = EINVAL;
-        return -1;
+        return NULL;
     }
 
     char inbuf[buf_size];
@@ -84,7 +84,8 @@ int read_from_client(int connect_fd, int buf_size) {
         totRead += numRead;
         bufr += numRead;
     }
-
-    return 0;
+    
+    // data read into inbuf, using bufr to move along buffer
+    return inbuf;
 }
 /*** SERVER ***/

@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <errno.h>
+#include <ctype.h>
 #include "utils.h"
 #include "quizdb.h"
 #define WRITE_BUFSIZE 512          /* General write message size */
@@ -101,17 +102,31 @@ int main (int argc, char** argv) {
             - close connection and serve next client
         */
         // write preamble to socket, handle invalid buffer size
-        if (write_to_client(connect_fd, preamble, strlen(preamble)) == -1) {
+        if (write_to_socket(connect_fd, preamble, strlen(preamble)) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
             exit(EXIT_FAILURE);
         }
 
-        // write quiz questions to client
-        // read responses from client
-        if (read_from_client(connect_fd, READ_BUFSIZE) == -1) {
-            fprintf(stderr, "Invalid buffer size for read.\n");
-            exit(EXIT_FAILURE);
+        // client instructed to enter 'Y' or 'q', grab first character only
+        // note: client side logic ensures only one character sent (no whitespace)
+        int response = read_from_socket(connect_fd, sizeof(char))[0];
+        // response to preamble determines client's interest in quiz
+        switch(tolower(response)) {
+            case 'y':
+                //user agrees to quiz
+                break;
+            case 'q':
+                // user does not want quiz, close listening socket
+                if (close(listen_fd) == -1) {
+                    fprintf(stderr, "Close error.\n");
+                    exit(EXIT_FAILURE);
+                }
+                break;
+            default:
+                break;
         }
+
+        // write quiz questions to client
         // close connection socket        
         if (close(connect_fd) == -1) {
             fprintf(stderr, "Close error.\n");
