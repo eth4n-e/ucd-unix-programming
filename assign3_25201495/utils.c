@@ -25,7 +25,7 @@ void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
     }
 }
 
-int write_to_socket(int connect_fd, char* msg, int buf_size) {
+int write_to_socket(int socket_fd, char* msg, int buf_size) {
     if (buf_size <= 0) {
        errno = EINVAL;
        return -1;
@@ -35,13 +35,13 @@ int write_to_socket(int connect_fd, char* msg, int buf_size) {
     // store message to write in temporary pointer
     // allows us to modify position of bufw (bufw += numWritten)
     // w/o losing reference to start of msg
-    char* bufw = msg;
+    const char* bufw = msg;
      
     // loop ensures write of buf_size
     for (totWritten = 0; totWritten < buf_size; ) {
         // attempt to write entirety of remaining buffer (stored in bufw)
         // write may transfer fewer bytes than requested
-        ssize_t numWritten = write(connect_fd, bufw, buf_size - totWritten);
+        ssize_t numWritten = write(socket_fd, bufw, buf_size - totWritten);
         if (numWritten <= 0) {
             // continue write process if error caused by interruption
             if (numWritten == -1 && errno == EINTR)
@@ -54,23 +54,26 @@ int write_to_socket(int connect_fd, char* msg, int buf_size) {
         totWritten += numWritten;
         bufw += numWritten;
     }
-
+    
     return 0;
 }
 
-char* read_from_socket(int connect_fd, int buf_size) {
+// user allocates buffer and passes, avoids returning a stack var (char buf[xxxx])
+// that will be deallocated when function returns 
+char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     if (buf_size <= 0) {
         errno = EINVAL;
         return NULL;
     }
 
-    char inbuf[buf_size];
     size_t totRead;
-    char* bufr = inbuf;
+    // use temp pointer to read data into buffer
+    // buffer preserves starting address of data
+    char* bufr = buffer;
     // loop ensures read of buf_size bytes
     for (totRead = 0; totRead < buf_size; ) {
         // read() may read fewer bytes than requested
-        ssize_t numRead = read(connect_fd, bufr, buf_size - totRead);
+        ssize_t numRead = read(socket_fd, bufr, buf_size - totRead);
         if (numRead == 0)
             break;
         if (numRead == -1) {
@@ -85,7 +88,8 @@ char* read_from_socket(int connect_fd, int buf_size) {
         bufr += numRead;
     }
     
+    printf("Received message: %s\n", buffer);
     // data read into inbuf, using bufr to move along buffer
-    return inbuf;
+    return buffer;
 }
 /*** SERVER ***/

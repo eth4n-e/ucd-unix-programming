@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include "utils.h"
 #define READ_BUFSIZE 512    /* Max message size sent from server */
+#define WRITE_BUFSIZE 16    /* Max message size to send to server */
 
 int main(int argc, char** argv) {
     if (argc != 3) {
@@ -33,11 +34,11 @@ int main(int argc, char** argv) {
     serverAddress.sin_addr.s_addr = inet_addr(server_ip);
     serverAddress.sin_port = htons(port_num);
 
-    // connect client to listening socket
+    // connect client socket to listening socket by address
     // address of listening socket specified by serverAddress & addrlen (sizeof(...))
-    int connect_fd = connect(client_fd, (struct sockaddr *)&serverAddress, sizeof(struct sockaddr));
+    int ret_code = connect(client_fd, (struct sockaddr *)&serverAddress, sizeof(struct sockaddr));
     
-    if (connect_fd == -1) {
+    if (ret_code == -1) {
         fprintf(stderr, "connect() error.\n");
         exit(-1);
     }
@@ -45,25 +46,24 @@ int main(int argc, char** argv) {
     // data transfer loop follows same logic as server
     for(;;) {
         // read preamble from server
-        char* msg = read_from_socket(connect_fd, READ_BUFSIZE);
+        char read_buf[READ_BUFSIZE];
+        char* msg = read_from_socket(client_fd, read_buf, READ_BUFSIZE);
         if (msg == NULL) {
             fprintf(stderr, "Error reading from socket.\n");
             exit(-1);
         }
 
-        printf("%s\n", msg);
-
         char *response = NULL;
         size_t len = 0;
         if(getline(&response, &len, stdin) != -1) {
+            printf("Client response: %s\n", response);
             char *ch = response;
             // move character through string to ignore whitespace
             while(isspace((unsigned char)*ch)) ch++;
             if(*ch != '\0') {
                 char first = *ch;
-                write_to_socket(connect_fd, &first, sizeof(char));
+                write_to_socket(client_fd, &first, WRITE_BUFSIZE);
             }
         }
-        
     }
 }

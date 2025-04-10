@@ -20,7 +20,7 @@ static const char *preamble =
     "You have only one attempt to answer a question.\n"
     "Your final score will be sent you after conclusion of the quiz.\n"
     "To start the quiz, press Y and <enter>.\n"
-    "To quit the quiz, press q and <enter>.\n";
+    "To quit the quiz, press q and <enter>.\0";
 
 int main (int argc, char** argv) {
     if (argc != 3) {
@@ -53,10 +53,10 @@ int main (int argc, char** argv) {
     // big-endian, used by network protocols, ensures consistent data interpretation / format
     serverAddress.sin_port = htons(port_num);
 
-    // bind created socket to struct specifying address 
-    int rc = bind(listen_fd, (struct sockaddr *)&serverAddress, sizeof(struct sockaddr));
+    // bind created socket to address specified by struct
+    int ret_code = bind(listen_fd, (struct sockaddr *)&serverAddress, sizeof(struct sockaddr));
     
-    if (rc == -1) {
+    if (ret_code == -1) {
         fprintf(stderr, "bind() error.\n");
         exit(-1);
     }
@@ -102,16 +102,41 @@ int main (int argc, char** argv) {
             - close connection and serve next client
         */
         // write preamble to socket, handle invalid buffer size
-        if (write_to_socket(connect_fd, preamble, strlen(preamble)) == -1) {
+        /* size_t totWritten;
+        // store message to write in temporary pointer
+        // allows us to modify position of bufw (bufw += numWritten)
+        // w/o losing reference to start of msg
+        const char* bufw = preamble;
+         
+        // loop ensures write of buf_size
+        for (totWritten = 0; totWritten < WRITE_BUFSIZE; ) {
+            // write may transfer fewer bytes than requested
+            ssize_t numWritten = write(connect_fd, bufw, WRITE_BUFSIZE - totWritten);
+            if (numWritten <= 0) {
+                // continue write process if error caused by interruption
+                if (numWritten == -1 && errno == EINTR)
+                    continue;
+                else {
+                    fprintf(stderr, "Write error.\n");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            totWritten += numWritten;
+            bufw += numWritten;
+        }
+
+        fprintf(stdout, "finished writing process to client"); */
+        if (write_to_socket(connect_fd, preamble, WRITE_BUFSIZE) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
             exit(EXIT_FAILURE);
         }
 
         // client instructed to enter 'Y' or 'q', grab first character only
         // note: client side logic ensures only one character sent (no whitespace)
-        int response = read_from_socket(connect_fd, sizeof(char))[0];
+        char read_buf[READ_BUFSIZE];
+        char* response = read_from_socket(connect_fd, read_buf, READ_BUFSIZE);
         // response to preamble determines client's interest in quiz
-        switch(tolower(response)) {
+        switch(tolower(response[0])) {
             case 'y':
                 //user agrees to quiz
                 break;
@@ -125,7 +150,6 @@ int main (int argc, char** argv) {
             default:
                 break;
         }
-
         // write quiz questions to client
         // close connection socket        
         if (close(connect_fd) == -1) {
