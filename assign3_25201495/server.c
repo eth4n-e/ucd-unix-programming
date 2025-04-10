@@ -8,7 +8,6 @@
 #include <errno.h>
 #include <ctype.h>
 #include "utils.h"
-#include "quizdb.h"
 #define WRITE_BUFSIZE 512          /* General write message size */
 #define READ_BUFSIZE 16            /* Max read message size */
 #define BACKLOG 10                 /* Pending connection limit */
@@ -68,8 +67,8 @@ int main (int argc, char** argv) {
         exit(EXIT_FAILURE);
     }
 
-    fprintf(stdout, "<Listening on %s:%d>\n", server_ip, port_num);
-    fprintf(stdout, "<Press ctrl-C to terminate>\n");
+    printf("<Listening on %s:%d>\n", server_ip, port_num);
+    printf("<Press ctrl-C to terminate>\n");
 
     // Step 4: accept incoming connections 
     for (;;) {
@@ -102,30 +101,6 @@ int main (int argc, char** argv) {
             - close connection and serve next client
         */
         // write preamble to socket, handle invalid buffer size
-        /* size_t totWritten;
-        // store message to write in temporary pointer
-        // allows us to modify position of bufw (bufw += numWritten)
-        // w/o losing reference to start of msg
-        const char* bufw = preamble;
-         
-        // loop ensures write of buf_size
-        for (totWritten = 0; totWritten < WRITE_BUFSIZE; ) {
-            // write may transfer fewer bytes than requested
-            ssize_t numWritten = write(connect_fd, bufw, WRITE_BUFSIZE - totWritten);
-            if (numWritten <= 0) {
-                // continue write process if error caused by interruption
-                if (numWritten == -1 && errno == EINTR)
-                    continue;
-                else {
-                    fprintf(stderr, "Write error.\n");
-                    exit(EXIT_FAILURE);
-                }
-            }
-            totWritten += numWritten;
-            bufw += numWritten;
-        }
-
-        fprintf(stdout, "finished writing process to client"); */
         if (write_to_socket(connect_fd, preamble, WRITE_BUFSIZE) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
             exit(EXIT_FAILURE);
@@ -139,10 +114,11 @@ int main (int argc, char** argv) {
         switch(tolower(response[0])) {
             case 'y':
                 //user agrees to quiz
+                start_quiz(connect_fd, WRITE_BUFSIZE, READ_BUFSIZE);
                 break;
             case 'q':
                 // user does not want quiz, close listening socket
-                if (close(listen_fd) == -1) {
+                if (close(connect_fd) == -1) {
                     fprintf(stderr, "Close error.\n");
                     exit(EXIT_FAILURE);
                 }

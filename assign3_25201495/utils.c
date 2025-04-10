@@ -1,14 +1,15 @@
-#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include "quizdb.h"
+#include "utils.h"
 
 /*** SERVER ***/
 int generate_random_num(int bound) {
-    return 0;
+    return (rand() % bound) + 1;
 }
 
 void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
@@ -91,5 +92,12 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     printf("Received message: %s\n", buffer);
     // data read into inbuf, using bufr to move along buffer
     return buffer;
+}
+
+void start_quiz(int socket_fd, int write_bufsize, int read_bufsize) {
+    printf("Beginning quiz with write buf %d bytes and read_buf %d bytes\n", write_bufsize, read_bufsize);    
+    int ran_num = generate_random_num(sizeof(QuizQ));
+    printf("Generated random num: %d\n", ran_num);
+    return;
 }
 /*** SERVER ***/
