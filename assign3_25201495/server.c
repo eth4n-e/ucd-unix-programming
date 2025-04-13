@@ -12,6 +12,7 @@
 #define WRITE_BUFSIZE 512          /* General write message size */
 #define READ_BUFSIZE 16            /* Max read message size */
 #define BACKLOG 10                 /* Pending connection limit */
+#define NUM_QUIZ_QUESTIONS 5       /* Generating 5 question quiz */
 
 // static limits scope to containing file, const for immutability
 static const char *preamble =
@@ -115,9 +116,9 @@ int main (int argc, char** argv) {
         switch(tolower(response[0])) {
             case 'y':
                 //user agrees to quiz, pass socket and buffer sizes for communication with client
-                // const int quiz_size = sizeof(QuizQ) / sizeof(QuizQ[0]);
-                printf("First question: %s\n", QuizQ[0]);
-                // start_quiz(connect_fd, QuizQ, quiz_size, WRITE_BUFSIZE, READ_BUFSIZE);
+                int quiz_size = (sizeof(QuizQ) / sizeof(QuizQ[0]));
+                struct Quiz quiz = generate_quiz(QuizQ, QuizA, quiz_size, NUM_QUIZ_QUESTIONS);
+                start_quiz(connect_fd, quiz, WRITE_BUFSIZE, READ_BUFSIZE);
                 break;
             case 'q':
                 // user does not want quiz, close connection socket

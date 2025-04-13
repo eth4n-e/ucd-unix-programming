@@ -10,12 +10,13 @@
 
 /*** SERVER ***/
 int generate_random_num(int bound) {
-    if (bound > 0) {
-        return (rand() % bound) + 1;
+    if (bound <= 0) {
+        fprintf(stderr, "Bound must exceed 0.\n");
+        return -1;
     }
 
-    fprintf(stderr, "Bound must exceed 0.\n");
-    return -1;
+
+    return rand() % bound;
 }
 
 void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
@@ -100,6 +101,32 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     return buffer;
 }
 
+Quiz generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_questions) {
+    if (num_questions <= 0) {
+        fprintf(stderr, "Quiz must consist of at least 1 question.\n");
+    }
+
+    if (num_questions > quiz_size) {
+        fprintf(stderr, "New quiz cannot contain more questions than original.\n");
+    }
+
+    struct Quiz quiz;
+    char* questions[num_questions];
+    char* answers[num_questions];
+
+    for (int i = 0; i < num_questions; i++) {
+        int question_idx = generate_random_num(quiz_size);
+        questions[i] = quiz_q[question_idx];
+        answers[i] = quiz_q[question_idx];
+    }
+    
+    quiz.questions = questions;
+    quiz.answers = answers;
+    quiz.num_questions = num_questions;
+
+    return quiz;
+}
+
 /* Idea for refactoring
 - create a struct that represents a quiz
     - question arr
@@ -108,21 +135,15 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
 - create a method to generate a quiz
 - call this method from start_quiz or call in server and pass quiz struct to start_quiz
 */
-void start_quiz(int socket_fd, char* quiz[], int quiz_size, int write_bufsize, int read_bufsize) {
-    if (quiz_size <= 0) {
+void start_quiz(int socket_fd, Quiz quiz, int write_bufsize, int read_bufsize) {
+    if (quiz.num_questions <= 0) {
         fprintf(stderr, "Error: quiz size must be greater than 0.\n");
         return;
     }
 
     // iteratively send the client quiz questions
-    for (int i = 0; i < NUM_QUIZ_QUESTIONS; i++) {
-        int question_idx = generate_random_num(quiz_size);
-        if (question_idx == -1) {
-            fprintf(stderr, "Failed to generate a random number.\n");
-            return;
-        }
-        
-        char* question = quiz[question_idx];
+    for (int i = 0; i < quiz.num_questions; i++) {
+        char* question = quiz.questions[i];
 
         if (write_to_socket(socket_fd, question, write_bufsize) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
