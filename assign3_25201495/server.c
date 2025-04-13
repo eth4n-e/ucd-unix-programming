@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include "utils.h"
+#include "quizdb.h"
 #define WRITE_BUFSIZE 512          /* General write message size */
 #define READ_BUFSIZE 16            /* Max read message size */
 #define BACKLOG 10                 /* Pending connection limit */
@@ -113,11 +114,12 @@ int main (int argc, char** argv) {
         // response to preamble determines client's interest in quiz
         switch(tolower(response[0])) {
             case 'y':
-                //user agrees to quiz
-                start_quiz(connect_fd, WRITE_BUFSIZE, READ_BUFSIZE);
+                //user agrees to quiz, pass socket and buffer sizes for communication with client
+                const int quiz_size = sizeof(QuizQ) / sizeof(QuizQ[0]);
+                start_quiz(connect_fd, QuizQ, quiz_size, WRITE_BUFSIZE, READ_BUFSIZE);
                 break;
             case 'q':
-                // user does not want quiz, close listening socket
+                // user does not want quiz, close connection socket
                 if (close(connect_fd) == -1) {
                     fprintf(stderr, "Close error.\n");
                     exit(EXIT_FAILURE);

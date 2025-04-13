@@ -4,12 +4,19 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <string.h>
 #include "quizdb.h"
 #include "utils.h"
+#define NUM_QUIZ_QUESTIONS 5    /* Number of quiz questions */
 
 /*** SERVER ***/
 int generate_random_num(int bound) {
-    return (rand() % bound) + 1;
+    if (bound > 0) {
+        return (rand() % bound) + 1;
+    }
+
+    fprintf(stderr, "Bound must exceed 0.\n");
+    return -1;
 }
 
 void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
@@ -94,10 +101,56 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     return buffer;
 }
 
-void start_quiz(int socket_fd, int write_bufsize, int read_bufsize) {
-    printf("Beginning quiz with write buf %d bytes and read_buf %d bytes\n", write_bufsize, read_bufsize);    
-    int ran_num = generate_random_num(sizeof(QuizQ));
-    printf("Generated random num: %d\n", ran_num);
+/* Idea for refactoring
+- create a struct that represents a quiz
+    - question arr
+    - answer arr
+    - size (num_questions)
+- create a method to generate a quiz
+- call this method from start_quiz or call in server and pass quiz struct to start_quiz
+*/
+void start_quiz(int socket_fd, char* quiz[], int quiz_size, int write_bufsize, int read_bufsize) {
+    if (quiz_size <= 0) {
+        fprintf(stderr, "Error: quiz size must be greater than 0.\n");
+        return;
+    }
+
+    // iteratively send the client quiz questions
+    for (int i = 0; i < NUM_QUIZ_QUESTIONS; i++) {
+        int question_idx = generate_random_num(quiz_size);
+        if (question_idx == -1) {
+            fprintf(stderr, "Failed to generate a random number.\n");
+            return;
+        }
+        
+        char* question = quiz[question_idx];
+
+        if (write_to_socket(socket_fd, question, write_bufsize) == -1) {
+            fprintf(stderr, "Invalid buffer size for write.\n");
+            exit(EXIT_FAILURE);
+        }
+
+        char read_buf[read_bufsize];
+        const char* usr_answer = read_from_socket(socket_fd, read_buf, read_bufsize);
+        const char* correct_answer = QuizA[question_idx];
+
+        // allocate a buffer to hold response to send back to client
+        char response[write_bufsize];
+
+        if (strcmp(usr_answer, correct_answer) == 0) {
+            // snprintf safely copies string into buffer
+            snprintf(response, sizeof(response), "Right Answer.");
+            if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
+                fprintf(stderr, "Invalid buffer size for write.\n");
+                exit(EXIT_FAILURE);
+            }
+        } else {
+            // snprintf can be used to make parameterized strings
+            // explains purpose of using a buffer instead of char* 
+            // can create a response that includes correct answer
+            snprintf(response, sizeof(response), "Wrong answer. Right answer is %s", correct_answer);
+        }
+    }
     return;
 }
 /*** SERVER ***/
