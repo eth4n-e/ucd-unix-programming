@@ -5,7 +5,6 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
-#include "quizdb.h"
 #include "utils.h"
 #define NUM_QUIZ_QUESTIONS 5    /* Number of quiz questions */
 
@@ -132,7 +131,8 @@ void start_quiz(int socket_fd, char* quiz[], int quiz_size, int write_bufsize, i
 
         char read_buf[read_bufsize];
         const char* usr_answer = read_from_socket(socket_fd, read_buf, read_bufsize);
-        const char* correct_answer = QuizA[question_idx];
+        printf("User's reponse to question %d: %s\n", question_idx, usr_answer); 
+        /* const char* correct_answer = QuizA[question_idx];
 
         // allocate a buffer to hold response to send back to client
         char response[write_bufsize];
@@ -149,7 +149,7 @@ void start_quiz(int socket_fd, char* quiz[], int quiz_size, int write_bufsize, i
             // explains purpose of using a buffer instead of char* 
             // can create a response that includes correct answer
             snprintf(response, sizeof(response), "Wrong answer. Right answer is %s", correct_answer);
-        }
+        } */
     }
     return;
 }

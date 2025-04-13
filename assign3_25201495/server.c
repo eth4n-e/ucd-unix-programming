@@ -115,8 +115,9 @@ int main (int argc, char** argv) {
         switch(tolower(response[0])) {
             case 'y':
                 //user agrees to quiz, pass socket and buffer sizes for communication with client
-                const int quiz_size = sizeof(QuizQ) / sizeof(QuizQ[0]);
-                start_quiz(connect_fd, QuizQ, quiz_size, WRITE_BUFSIZE, READ_BUFSIZE);
+                // const int quiz_size = sizeof(QuizQ) / sizeof(QuizQ[0]);
+                printf("First question: %s\n", QuizQ[0]);
+                // start_quiz(connect_fd, QuizQ, quiz_size, WRITE_BUFSIZE, READ_BUFSIZE);
                 break;
             case 'q':
                 // user does not want quiz, close connection socket
