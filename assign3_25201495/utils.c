@@ -15,7 +15,6 @@ int generate_random_num(int bound) {
         return -1;
     }
 
-
     return rand() % bound;
 }
 
@@ -68,6 +67,8 @@ int write_to_socket(int socket_fd, char* msg, int buf_size) {
 
 // user allocates buffer and passes, avoids returning a stack var (char buf[xxxx])
 // that will be deallocated when function returns 
+
+// need to add null terminator to buffer
 char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     if (buf_size <= 0) {
         errno = EINVAL;
@@ -83,7 +84,7 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
         // read() may read fewer bytes than requested
         ssize_t numRead = read(socket_fd, bufr, buf_size - totRead);
         if (numRead == 0)
-            break;
+            break; // end of data
         if (numRead == -1) {
             // continue read process if interrupted
             if (errno == EINTR)
@@ -101,49 +102,57 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     return buffer;
 }
 
-Quiz generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_questions) {
-    if (num_questions <= 0) {
-        fprintf(stderr, "Quiz must consist of at least 1 question.\n");
+// more intuitive to return a pointer because
+// 1. dynamically allocating memory for questions / answers based on num_questions
+// 2. size of questions / answers is not fixed 
+// 3. returning pointer avoids copying large amounts of data
+// 4. arrays defined dynamically won't copy correctly via shallow copy
+// returning structs by value works for small, fixed-sized structs
+Quiz* generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_questions) {
+    if (num_questions <= 0 || num_questions > quiz_size) {
+        fprintf(stderr, "Quiz cannot be defined with %d questions.\n", num_questions);
     }
 
-    if (num_questions > quiz_size) {
-        fprintf(stderr, "New quiz cannot contain more questions than original.\n");
+    Quiz* quiz = malloc(sizeof(Quiz));
+    quiz -> num_questions = num_questions;
+    // questions / answers point to a list of strings
+    // must allocate a string (char*) for each question
+    quiz -> questions = malloc(num_questions * sizeof(char*));
+    if (quiz -> questions == NULL) {
+        fprintf(stderr, "Unable to allocate questions.\n");
+        return NULL;
     }
-
-    struct Quiz quiz;
-    char* questions[num_questions];
-    char* answers[num_questions];
-
+    quiz -> answers = malloc(num_questions * sizeof(char*));
+    if (quiz -> answers == NULL) {
+        fprintf(stderr, "Unable to allocate questions.\n");
+        return NULL;
+    }
+    // add questions / answers to our quiz
     for (int i = 0; i < num_questions; i++) {
         int question_idx = generate_random_num(quiz_size);
-        questions[i] = quiz_q[question_idx];
-        answers[i] = quiz_q[question_idx];
+        // no dynamic allocation here because each question / answer is predefined from QuizQ/A
+        quiz -> questions[i] = quiz_q[question_idx];
+        quiz -> answers[i] = quiz_q[question_idx];
     }
     
-    quiz.questions = questions;
-    quiz.answers = answers;
-    quiz.num_questions = num_questions;
-
     return quiz;
 }
 
-/* Idea for refactoring
-- create a struct that represents a quiz
-    - question arr
-    - answer arr
-    - size (num_questions)
-- create a method to generate a quiz
-- call this method from start_quiz or call in server and pass quiz struct to start_quiz
-*/
-void start_quiz(int socket_fd, Quiz quiz, int write_bufsize, int read_bufsize) {
-    if (quiz.num_questions <= 0) {
+void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) {
+    if (quiz == NULL) {
+        fprintf(stderr, "Unable to begin non-existent quiz.\n");
+        return;
+    }
+
+    int num_questions = quiz -> num_questions;
+    if (num_questions <= 0) {
         fprintf(stderr, "Error: quiz size must be greater than 0.\n");
         return;
     }
 
     // iteratively send the client quiz questions
-    for (int i = 0; i < quiz.num_questions; i++) {
-        char* question = quiz.questions[i];
+    for (int i = 0; i < num_questions; i++) {
+        char* question = quiz -> questions[i];
 
         if (write_to_socket(socket_fd, question, write_bufsize) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
@@ -152,7 +161,7 @@ void start_quiz(int socket_fd, Quiz quiz, int write_bufsize, int read_bufsize) {
 
         char read_buf[read_bufsize];
         const char* usr_answer = read_from_socket(socket_fd, read_buf, read_bufsize);
-        printf("User's reponse to question %d: %s\n", question_idx, usr_answer); 
+        printf("User's reponse to question %d: %s\n", i, usr_answer); 
         /* const char* correct_answer = QuizA[question_idx];
 
         // allocate a buffer to hold response to send back to client

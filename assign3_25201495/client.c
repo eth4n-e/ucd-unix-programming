@@ -43,8 +43,9 @@ int main(int argc, char** argv) {
         exit(-1);
     }
 
-    // data transfer loop follows same logic as server
-    for(;;) {
+    // code block to handle accepting / denying quiz start
+    // want to refactor this into a more appropriate method
+    {
         // read preamble from server
         char read_buf[READ_BUFSIZE];
         char* msg = read_from_socket(client_fd, read_buf, READ_BUFSIZE);
@@ -56,14 +57,52 @@ int main(int argc, char** argv) {
         char *response = NULL;
         size_t len = 0;
         if(getline(&response, &len, stdin) != -1) {
-            printf("Client response: %s\n", response);
-            char *ch = response;
-            // move character through string to ignore whitespace
-            while(isspace((unsigned char)*ch)) ch++;
-            if(*ch != '\0') {
-                char first = *ch;
-                write_to_socket(client_fd, &first, WRITE_BUFSIZE);
+            char first = *response;
+            if (write_to_socket(client_fd, &first, WRITE_BUFSIZE) == -1) {
+                fprintf(stderr, "Invalid buffer size for write.\n");
+                exit(EXIT_FAILURE);
+            }
+            
+            // close the client's socket if they do not want to take quiz
+            if (first == 'q') {
+                if (close(client_fd) == -1) {
+                    fprintf(stderr, "Close error.\n");
+                    exit(EXIT_FAILURE);
+                }
+                // mark connection as closed
+                client_fd = -1;
+                free(response);
+                exit(EXIT_SUCCESS);
             }
         }
     }
+
+    // data transfer loop follows same logic as server
+    // loop handles quiz interaction between server
+    for(;;) {
+        char bufr[READ_BUFSIZE];
+        char* question = read_from_socket(client_fd, bufr, READ_BUFSIZE);
+        if (question == NULL) {
+            fprintf(stderr, "Error reading from socket.\n");
+            exit(-1);
+        }
+    
+        printf("%s\n", question);
+
+        char* answer = NULL;
+        size_t len;
+        if (getline(&answer, &len, stdin) != -1) {
+            if (write_to_socket(client_fd, answer, WRITE_BUFSIZE) == -1) {
+                fprintf(stderr, "Invalid buffer size for write.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+    }
+
+    if (close(client_fd) == -1) {
+        fprintf(stderr, "Close error.\n");
+        exit(EXIT_FAILURE);
+    }
+    exit(EXIT_SUCCESS);
 }

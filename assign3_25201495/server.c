@@ -89,19 +89,6 @@ int main (int argc, char** argv) {
         // display client address
         display_client_addr((struct sockaddr*)&client_addr, addr_len);
 
-        /* TO-DO:
-        - begin quiz with preamble statement
-        - wait for client input
-            - start quiz if client sends Y, else close connection
-        - loop
-            - server issues five quiz questions
-            - for each question
-                - send right answer if client correct
-                - indicate to client they are wrong if incorrect and send right answer
-        - conclusion of quiz
-            - send quiz results to client
-            - close connection and serve next client
-        */
         // write preamble to socket, handle invalid buffer size
         if (write_to_socket(connect_fd, preamble, WRITE_BUFSIZE) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
@@ -114,19 +101,27 @@ int main (int argc, char** argv) {
         char* response = read_from_socket(connect_fd, read_buf, READ_BUFSIZE);
         // response to preamble determines client's interest in quiz
         switch(tolower(response[0])) {
-            case 'y':
+            // expected expression errors b/c case labels are not their own scope (fall under switch scope)
+            // so if quiz_size was also defined in case 'q', the definitions would collide
+            // in C the next statement following a case label must be executable unless in new scope {}
+            case 'y': {
                 //user agrees to quiz, pass socket and buffer sizes for communication with client
-                int quiz_size = (sizeof(QuizQ) / sizeof(QuizQ[0]));
-                struct Quiz quiz = generate_quiz(QuizQ, QuizA, quiz_size, NUM_QUIZ_QUESTIONS);
+                int quiz_size = get_quiz_size();
+                char** quiz_questions = get_quiz_questions();
+                char** quiz_answers = get_quiz_answers();
+                Quiz* quiz = generate_quiz(quiz_questions, quiz_answers,
+                    quiz_size, NUM_QUIZ_QUESTIONS);
                 start_quiz(connect_fd, quiz, WRITE_BUFSIZE, READ_BUFSIZE);
                 break;
-            case 'q':
+            }
+            case 'q': {
                 // user does not want quiz, close connection socket
                 if (close(connect_fd) == -1) {
                     fprintf(stderr, "Close error.\n");
                     exit(EXIT_FAILURE);
                 }
                 break;
+            }
             default:
                 break;
         }
