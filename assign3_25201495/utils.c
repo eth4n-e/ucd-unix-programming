@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
+#include <time.h>
 #include "utils.h"
 #define NUM_QUIZ_QUESTIONS 5    /* Number of quiz questions */
 
@@ -97,7 +98,6 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
         bufr += numRead;
     }
     
-    printf("Received message: %s\n", buffer);
     // data read into inbuf, using bufr to move along buffer
     return buffer;
 }
@@ -111,6 +111,7 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
 Quiz* generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_questions) {
     if (num_questions <= 0 || num_questions > quiz_size) {
         fprintf(stderr, "Quiz cannot be defined with %d questions.\n", num_questions);
+        return NULL;
     }
 
     Quiz* quiz = malloc(sizeof(Quiz));
@@ -127,26 +128,45 @@ Quiz* generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_quest
         fprintf(stderr, "Unable to allocate questions.\n");
         return NULL;
     }
+
+    // seed based on current time before generating random nums
+    srand(time(NULL));
+
     // add questions / answers to our quiz
     for (int i = 0; i < num_questions; i++) {
         int question_idx = generate_random_num(quiz_size);
         // no dynamic allocation here because each question / answer is predefined from QuizQ/A
         quiz -> questions[i] = quiz_q[question_idx];
-        quiz -> answers[i] = quiz_q[question_idx];
+        quiz -> answers[i] = quiz_a[question_idx];
     }
     
     return quiz;
 }
 
+void cleanup_quiz(Quiz* quiz) {
+    if (quiz == NULL) {
+        return;
+    }
+
+    // free all dynamically allocated variables
+    // Note: don't free quiz -> questions[i] b/c each char* points to a string literal 
+    // not dynamically allocated memory
+    free(quiz -> questions);
+    free(quiz -> answers);
+    free(quiz);
+}
+
 void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) {
     if (quiz == NULL) {
         fprintf(stderr, "Unable to begin non-existent quiz.\n");
+        cleanup_quiz(quiz);
         return;
     }
 
     int num_questions = quiz -> num_questions;
     if (num_questions <= 0) {
         fprintf(stderr, "Error: quiz size must be greater than 0.\n");
+        cleanup_quiz(quiz); 
         return;
     }
 
@@ -156,22 +176,26 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
 
         if (write_to_socket(socket_fd, question, write_bufsize) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
+            cleanup_quiz(quiz);
             exit(EXIT_FAILURE);
         }
 
         char read_buf[read_bufsize];
         const char* usr_answer = read_from_socket(socket_fd, read_buf, read_bufsize);
-        printf("User's reponse to question %d: %s\n", i, usr_answer); 
-        /* const char* correct_answer = QuizA[question_idx];
+        const char* correct_answer = quiz -> answers[i];
 
         // allocate a buffer to hold response to send back to client
         char response[write_bufsize];
+        
+        printf("User answer: %s", usr_answer);
+        printf("Correct answer: %s\n", correct_answer);
 
         if (strcmp(usr_answer, correct_answer) == 0) {
             // snprintf safely copies string into buffer
             snprintf(response, sizeof(response), "Right Answer.");
             if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
                 fprintf(stderr, "Invalid buffer size for write.\n");
+                cleanup_quiz(quiz);
                 exit(EXIT_FAILURE);
             }
         } else {
@@ -179,8 +203,15 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
             // explains purpose of using a buffer instead of char* 
             // can create a response that includes correct answer
             snprintf(response, sizeof(response), "Wrong answer. Right answer is %s", correct_answer);
-        } */
+            if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
+                fprintf(stderr, "Invalid buffer size for write.\n");
+                exit(EXIT_FAILURE);
+            }
+        }
     }
+   
+    // quiz, questions, and answers were dynamically allocated, perform cleanup
+    cleanup_quiz(quiz);
     return;
 }
 /*** SERVER ***/

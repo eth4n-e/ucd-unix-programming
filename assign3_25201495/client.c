@@ -54,6 +54,8 @@ int main(int argc, char** argv) {
             exit(-1);
         }
 
+        printf("%s\n", msg);
+
         char *response = NULL;
         size_t len = 0;
         if(getline(&response, &len, stdin) != -1) {
@@ -97,7 +99,8 @@ int main(int argc, char** argv) {
                 exit(EXIT_FAILURE);
             }
         }
-
+        // for spacing purposes
+        printf("\n");
     }
 
     if (close(client_fd) == -1) {
