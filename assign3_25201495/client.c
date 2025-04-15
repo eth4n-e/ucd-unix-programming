@@ -76,14 +76,15 @@ int main(int argc, char** argv) {
                 free(response);
                 exit(EXIT_SUCCESS);
             }
+            printf("\n");
         }
     }
 
     // data transfer loop follows same logic as server
     // loop handles quiz interaction between server
     for(;;) {
-        char bufr[READ_BUFSIZE];
-        char* question = read_from_socket(client_fd, bufr, READ_BUFSIZE);
+        char bufr_question[READ_BUFSIZE];
+        char* question = read_from_socket(client_fd, bufr_question, READ_BUFSIZE);
         if (question == NULL) {
             fprintf(stderr, "Error reading from socket.\n");
             exit(-1);
@@ -99,6 +100,14 @@ int main(int argc, char** argv) {
                 exit(EXIT_FAILURE);
             }
         }
+        // read result from server (whether client correct or not)
+        char bufr_response[READ_BUFSIZE];
+        char* response = read_from_socket(client_fd, bufr_response, READ_BUFSIZE);
+        if (response == NULL) {
+            fprintf(stderr, "Error reading from socket.\n");
+            exit(-1);
+        }
+        printf("%s\n", response);
         // for spacing purposes
         printf("\n");
     }

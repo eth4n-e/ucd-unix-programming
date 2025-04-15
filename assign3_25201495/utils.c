@@ -44,7 +44,6 @@ int write_to_socket(int socket_fd, char* msg, int buf_size) {
     // allows us to modify position of bufw (bufw += numWritten)
     // w/o losing reference to start of msg
     const char* bufw = msg;
-     
     // loop ensures write of buf_size
     for (totWritten = 0; totWritten < buf_size; ) {
         // attempt to write entirety of remaining buffer (stored in bufw)
@@ -68,8 +67,7 @@ int write_to_socket(int socket_fd, char* msg, int buf_size) {
 
 // user allocates buffer and passes, avoids returning a stack var (char buf[xxxx])
 // that will be deallocated when function returns 
-
-// need to add null terminator to buffer
+// buf_size includes space for null terminator, can only truly fill buffer to buf_size - 1
 char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     if (buf_size <= 0) {
         errno = EINVAL;
@@ -80,10 +78,11 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
     // use temp pointer to read data into buffer
     // buffer preserves starting address of data
     char* bufr = buffer;
+    int max_size = buf_size - 1; // leave space for \0
     // loop ensures read of buf_size bytes
-    for (totRead = 0; totRead < buf_size; ) {
+    for (totRead = 0; totRead < max_size; ) {
         // read() may read fewer bytes than requested
-        ssize_t numRead = read(socket_fd, bufr, buf_size - totRead);
+        ssize_t numRead = read(socket_fd, bufr, max_size - totRead);
         if (numRead == 0)
             break; // end of data
         if (numRead == -1) {
@@ -97,9 +96,54 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
         totRead += numRead;
         bufr += numRead;
     }
-    
+   
+    buffer[max_size] = '\0';
     // data read into inbuf, using bufr to move along buffer
     return buffer;
+}
+
+int is_in_quiz_set(int q_set[], int set_size, int q_num) {
+    int found = 0;
+    for (int i = 0; i < set_size; i++) {
+        if (q_num == q_set[i]) {
+            found = 1;
+            return found;
+        }
+    }
+    return found;
+}
+
+// Clarification:
+// num_questions: refers to number of questions to include in Quiz
+// quiz_size: size of original quiz set that we are drawing from
+void generate_unique_questions(Quiz* quiz, char* quiz_q[], char* quiz_a[], int quiz_set_size) {
+    if (quiz == NULL || quiz -> num_questions <= 0 || quiz -> num_questions > quiz_set_size) {
+        fprintf(stderr, "Unable to generate questions for an invalid quiz.\n");
+        return;
+    }
+
+    int num_questions = quiz -> num_questions;
+    int quiz_set[num_questions];
+    for (int i = 0; i < num_questions; i++) {
+        // define variables outside loop, scope ends with } brace closing do block
+        // thus variable inside do block not usable in while condition
+        int question_idx;
+        int check_until;
+        // continue to generate questions until it is unique
+        do {
+            question_idx = generate_random_num(quiz_set_size);
+            quiz_set[i] = question_idx;
+            // check values before most recently added
+            // checking most recently added would result in an erroneous duplicate flag
+            check_until = i-1; 
+        } while (is_in_quiz_set(quiz_set, check_until, question_idx));
+
+        // add question to quiz once index is unique
+        quiz -> questions[i] = quiz_q[question_idx];
+        quiz -> answers[i] = quiz_a[question_idx];
+    }
+
+    return;
 }
 
 // more intuitive to return a pointer because
@@ -108,8 +152,8 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
 // 3. returning pointer avoids copying large amounts of data
 // 4. arrays defined dynamically won't copy correctly via shallow copy
 // returning structs by value works for small, fixed-sized structs
-Quiz* generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_questions) {
-    if (num_questions <= 0 || num_questions > quiz_size) {
+Quiz* generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_set_size, int num_questions) {
+    if (num_questions <= 0 || num_questions > quiz_set_size) {
         fprintf(stderr, "Quiz cannot be defined with %d questions.\n", num_questions);
         return NULL;
     }
@@ -131,14 +175,7 @@ Quiz* generate_quiz(char* quiz_q[], char* quiz_a[], int quiz_size, int num_quest
 
     // seed based on current time before generating random nums
     srand(time(NULL));
-
-    // add questions / answers to our quiz
-    for (int i = 0; i < num_questions; i++) {
-        int question_idx = generate_random_num(quiz_size);
-        // no dynamic allocation here because each question / answer is predefined from QuizQ/A
-        quiz -> questions[i] = quiz_q[question_idx];
-        quiz -> answers[i] = quiz_a[question_idx];
-    }
+    generate_unique_questions(quiz, quiz_q, quiz_a, quiz_set_size);
     
     return quiz;
 }
@@ -147,7 +184,6 @@ void cleanup_quiz(Quiz* quiz) {
     if (quiz == NULL) {
         return;
     }
-
     // free all dynamically allocated variables
     // Note: don't free quiz -> questions[i] b/c each char* points to a string literal 
     // not dynamically allocated memory
@@ -164,6 +200,7 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
     }
 
     int num_questions = quiz -> num_questions;
+    printf("Num questions: %d\n", num_questions);
     if (num_questions <= 0) {
         fprintf(stderr, "Error: quiz size must be greater than 0.\n");
         cleanup_quiz(quiz); 
@@ -173,7 +210,6 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
     // iteratively send the client quiz questions
     for (int i = 0; i < num_questions; i++) {
         char* question = quiz -> questions[i];
-
         if (write_to_socket(socket_fd, question, write_bufsize) == -1) {
             fprintf(stderr, "Invalid buffer size for write.\n");
             cleanup_quiz(quiz);
@@ -183,14 +219,12 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
         char read_buf[read_bufsize];
         const char* usr_answer = read_from_socket(socket_fd, read_buf, read_bufsize);
         const char* correct_answer = quiz -> answers[i];
-
         // allocate a buffer to hold response to send back to client
         char response[write_bufsize];
-        
-        printf("User answer: %s", usr_answer);
-        printf("Correct answer: %s\n", correct_answer);
-
-        if (strcmp(usr_answer, correct_answer) == 0) {
+        int compare = strcmp(usr_answer, correct_answer);
+        // comparisons have been off b/c usr_answer includes enter key which maps to ASCII val of 10
+        printf("Result of comparing answers: %d\n", compare);
+        if (compare == 0) {
             // snprintf safely copies string into buffer
             snprintf(response, sizeof(response), "Right Answer.");
             if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
@@ -209,8 +243,8 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
             }
         }
     }
-   
     // quiz, questions, and answers were dynamically allocated, perform cleanup
+    printf("End of quiz\n");
     cleanup_quiz(quiz);
     return;
 }
