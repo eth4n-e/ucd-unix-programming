@@ -83,8 +83,8 @@ int main(int argc, char** argv) {
     // data transfer loop follows same logic as server
     // loop handles quiz interaction between server
     for(;;) {
-        char bufr_question[READ_BUFSIZE];
-        char* question = read_from_socket(client_fd, bufr_question, READ_BUFSIZE);
+        char bufr[READ_BUFSIZE];
+        char* question = read_from_socket(client_fd, bufr, READ_BUFSIZE);
         if (question == NULL) {
             fprintf(stderr, "Error reading from socket.\n");
             exit(-1);
@@ -95,14 +95,21 @@ int main(int argc, char** argv) {
         char* answer = NULL;
         size_t len;
         if (getline(&answer, &len, stdin) != -1) {
+            // replace newline character with null terminator
+            // newline interferes with strcmp on server
+            // strcspn returns length of string up to first occurrence of string arg
+            answer[strcspn(answer, "\n")] = '\0';
             if (write_to_socket(client_fd, answer, WRITE_BUFSIZE) == -1) {
                 fprintf(stderr, "Invalid buffer size for write.\n");
+                free(answer);
                 exit(EXIT_FAILURE);
             }
         }
+        // reminder that getline dynamically allocates answer, my responsibility to free
+        free(answer);
         // read result from server (whether client correct or not)
-        char bufr_response[READ_BUFSIZE];
-        char* response = read_from_socket(client_fd, bufr_response, READ_BUFSIZE);
+        // able to reuse bufr b/c method clears buffer before reading
+        char* response = read_from_socket(client_fd, bufr, READ_BUFSIZE);
         if (response == NULL) {
             fprintf(stderr, "Error reading from socket.\n");
             exit(-1);

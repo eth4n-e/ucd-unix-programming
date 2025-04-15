@@ -33,7 +33,7 @@ void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
     }
 }
 
-int write_to_socket(int socket_fd, char* msg, int buf_size) {
+int write_to_socket(int socket_fd, char* buffer, int buf_size) {
     if (buf_size <= 0) {
        errno = EINVAL;
        return -1;
@@ -43,8 +43,9 @@ int write_to_socket(int socket_fd, char* msg, int buf_size) {
     // store message to write in temporary pointer
     // allows us to modify position of bufw (bufw += numWritten)
     // w/o losing reference to start of msg
-    const char* bufw = msg;
-    // loop ensures write of buf_size
+    const char* bufw = buffer;
+    // int max_size = buf_size - 1;
+    // loop ensures write of max_size
     for (totWritten = 0; totWritten < buf_size; ) {
         // attempt to write entirety of remaining buffer (stored in bufw)
         // write may transfer fewer bytes than requested
@@ -61,7 +62,8 @@ int write_to_socket(int socket_fd, char* msg, int buf_size) {
         totWritten += numWritten;
         bufw += numWritten;
     }
-    
+    // null terminate written message
+    // msg[max_size] = '\0';
     return 0;
 }
 
@@ -73,17 +75,23 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
         errno = EINVAL;
         return NULL;
     }
+    // clear buffer before reading data into it
+    // ensures no residual data remains that could interfere
+    // filling with 0 (null byte, byte with val = 0) ensures any unfilled data in buffer
+    // is not stray / random, null terminator is same a null byte marking end of string
+    memset(buffer, 0, buf_size);
 
     size_t totRead;
     // use temp pointer to read data into buffer
     // buffer preserves starting address of data
     char* bufr = buffer;
-    int max_size = buf_size - 1; // leave space for \0
     // loop ensures read of buf_size bytes
-    for (totRead = 0; totRead < max_size; ) {
+    for (totRead = 0; totRead < buf_size; ) {
         // read() may read fewer bytes than requested
-        ssize_t numRead = read(socket_fd, bufr, max_size - totRead);
+        ssize_t numRead = read(socket_fd, bufr, buf_size - totRead);
         if (numRead == 0)
+            // wondering if I should return something to indicate EOF or closed connection
+            // from what I understand numRead would only be 0 when connection to socket is closed
             break; // end of data
         if (numRead == -1) {
             // continue read process if interrupted
@@ -97,7 +105,6 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
         bufr += numRead;
     }
    
-    buffer[max_size] = '\0';
     // data read into inbuf, using bufr to move along buffer
     return buffer;
 }
@@ -207,6 +214,8 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
         return;
     }
 
+    int num_correct = 0;
+
     // iteratively send the client quiz questions
     for (int i = 0; i < num_questions; i++) {
         char* question = quiz -> questions[i];
@@ -225,6 +234,7 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
         // comparisons have been off b/c usr_answer includes enter key which maps to ASCII val of 10
         printf("Result of comparing answers: %d\n", compare);
         if (compare == 0) {
+            num_correct++;
             // snprintf safely copies string into buffer
             snprintf(response, sizeof(response), "Right Answer.");
             if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
@@ -245,6 +255,12 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
     }
     // quiz, questions, and answers were dynamically allocated, perform cleanup
     printf("End of quiz\n");
+    char results[write_bufsize];
+    snprintf(results, sizeof(results), "Your quiz szore if %d/%d. Goodbye!\n", num_correct, num_questions);
+    if (write_to_socket(socket_fd, results, write_bufsize) == -1) {
+        fprintf(stderr, "Invalid buffer size for write.\n");
+        exit(EXIT_FAILURE);
+    }
     cleanup_quiz(quiz);
     return;
 }

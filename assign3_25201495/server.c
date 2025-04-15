@@ -15,13 +15,17 @@
 #define NUM_QUIZ_QUESTIONS 5       /* Generating 5 question quiz */
 
 // static limits scope to containing file, const for immutability
-static const char *preamble =
+// had to define as static, fixed-size array instead of char*
+// reason: added null terminator character to write_to / read_from socket
+// preamble < 512 bytes so with char* approach write_to_socket was trying to access mem past
+// the literal (not valid for reading)
+static const char preamble[WRITE_BUFSIZE] = 
     "Welcome to Unix Programming Quiz!\n"
     "The quiz comprises five questions posed you one after the other.\n"
     "You have only one attempt to answer a question.\n"
     "Your final score will be sent you after conclusion of the quiz.\n"
     "To start the quiz, press Y and <enter>.\n"
-    "To quit the quiz, press q and <enter>.\0";
+    "To quit the quiz, press q and <enter>.";
 
 int main (int argc, char** argv) {
     if (argc != 3) {
