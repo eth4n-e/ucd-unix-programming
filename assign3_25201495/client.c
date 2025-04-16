@@ -43,25 +43,29 @@ int main(int argc, char** argv) {
         exit(-1);
     }
 
+    socket_status sock_status;
     // code block to handle accepting / denying quiz start
     // want to refactor this into a more appropriate method
     {
         // read preamble from server
         char read_buf[READ_BUFSIZE];
-        char* msg = read_from_socket(client_fd, read_buf, READ_BUFSIZE);
-        if (msg == NULL) {
-            fprintf(stderr, "Error reading from socket.\n");
-            exit(-1);
+        sock_status = read_from_socket(client_fd, read_buf, READ_BUFSIZE);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to read from socket.\n");
+            exit(EXIT_FAILURE);
+        } else if (sock_status == SOCKET_CLOSED) {
+            goto close_connection_to_server;
         }
 
-        printf("%s\n", msg);
+        printf("%s\n", read_buf);
 
         char *response = NULL;
         size_t len = 0;
         if(getline(&response, &len, stdin) != -1) {
             char first = *response;
-            if (write_to_socket(client_fd, &first, WRITE_BUFSIZE) == -1) {
-                fprintf(stderr, "Invalid buffer size for write.\n");
+            sock_status = write_to_socket(client_fd, &first, WRITE_BUFSIZE);
+            if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+                fprintf(stderr, "Unable to write to socket.\n");
                 exit(EXIT_FAILURE);
             }
             
@@ -77,6 +81,7 @@ int main(int argc, char** argv) {
                 exit(EXIT_SUCCESS);
             }
             printf("\n");
+            free(response);
         }
     }
 
@@ -84,13 +89,15 @@ int main(int argc, char** argv) {
     // loop handles quiz interaction between server
     for(;;) {
         char bufr[READ_BUFSIZE];
-        char* question = read_from_socket(client_fd, bufr, READ_BUFSIZE);
-        if (question == NULL) {
-            fprintf(stderr, "Error reading from socket.\n");
-            exit(-1);
+        sock_status = read_from_socket(client_fd, bufr, READ_BUFSIZE);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to read from socket.\n");
+            exit(EXIT_FAILURE);
+        } else if (sock_status == SOCKET_CLOSED) {
+            goto close_connection_to_server;
         }
     
-        printf("%s\n", question);
+        printf("%s\n", bufr);
 
         char* answer = NULL;
         size_t len;
@@ -99,8 +106,9 @@ int main(int argc, char** argv) {
             // newline interferes with strcmp on server
             // strcspn returns length of string up to first occurrence of string arg
             answer[strcspn(answer, "\n")] = '\0';
-            if (write_to_socket(client_fd, answer, WRITE_BUFSIZE) == -1) {
-                fprintf(stderr, "Invalid buffer size for write.\n");
+            sock_status = write_to_socket(client_fd, answer, WRITE_BUFSIZE);
+            if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+                fprintf(stderr, "Unable to write to socket.\n");
                 free(answer);
                 exit(EXIT_FAILURE);
             }
@@ -109,19 +117,22 @@ int main(int argc, char** argv) {
         free(answer);
         // read result from server (whether client correct or not)
         // able to reuse bufr b/c method clears buffer before reading
-        char* response = read_from_socket(client_fd, bufr, READ_BUFSIZE);
-        if (response == NULL) {
-            fprintf(stderr, "Error reading from socket.\n");
-            exit(-1);
+        sock_status = read_from_socket(client_fd, bufr, READ_BUFSIZE);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to read from socket.\n");
+            exit(EXIT_FAILURE);
+        } else if (sock_status == SOCKET_CLOSED) {
+            goto close_connection_to_server;
         }
-        printf("%s\n", response);
+        printf("%s\n", bufr);
         // for spacing purposes
         printf("\n");
     }
 
-    if (close(client_fd) == -1) {
-        fprintf(stderr, "Close error.\n");
-        exit(EXIT_FAILURE);
-    }
+    close_connection_to_server:
+        if (close(client_fd) == -1) {
+            fprintf(stderr, "Close error.\n");
+            exit(EXIT_FAILURE);
+        }
     exit(EXIT_SUCCESS);
 }

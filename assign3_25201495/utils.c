@@ -33,10 +33,10 @@ void display_client_addr(struct sockaddr* addr, socklen_t addr_len) {
     }
 }
 
-int write_to_socket(int socket_fd, char* buffer, int buf_size) {
-    if (buf_size <= 0) {
+socket_status write_to_socket(int socket_fd, char* buffer, int buf_size) {
+    if (buf_size <= 0 || strlen(buffer) > buf_size) {
        errno = EINVAL;
-       return -1;
+       return SOCKET_INVALID;
     }
 
     size_t totWritten;
@@ -55,8 +55,7 @@ int write_to_socket(int socket_fd, char* buffer, int buf_size) {
             if (numWritten == -1 && errno == EINTR)
                 continue;
             else {
-                fprintf(stderr, "Write error.\n");
-                exit(EXIT_FAILURE);
+                return SOCKET_ERROR;
             }
         }
         totWritten += numWritten;
@@ -64,16 +63,16 @@ int write_to_socket(int socket_fd, char* buffer, int buf_size) {
     }
     // null terminate written message
     // msg[max_size] = '\0';
-    return 0;
+    return SOCKET_OK;
 }
 
 // user allocates buffer and passes, avoids returning a stack var (char buf[xxxx])
 // that will be deallocated when function returns 
 // buf_size includes space for null terminator, can only truly fill buffer to buf_size - 1
-char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
-    if (buf_size <= 0) {
+socket_status read_from_socket(int socket_fd, char* buffer, int buf_size) {
+    if (buf_size <= 0 || strlen(buffer) > buf_size) {
         errno = EINVAL;
-        return NULL;
+        return SOCKET_INVALID;
     }
     // clear buffer before reading data into it
     // ensures no residual data remains that could interfere
@@ -90,23 +89,23 @@ char* read_from_socket(int socket_fd, char* buffer, int buf_size) {
         // read() may read fewer bytes than requested
         ssize_t numRead = read(socket_fd, bufr, buf_size - totRead);
         if (numRead == 0)
-            // wondering if I should return something to indicate EOF or closed connection
-            // from what I understand numRead would only be 0 when connection to socket is closed
-            break; // end of data
+            // numRead would only be 0 when connection to socket is closed
+            // could not be 0 from reading data b/c then totRead = buf_size
+            return SOCKET_CLOSED;
         if (numRead == -1) {
             // continue read process if interrupted
             if (errno == EINTR)
                 continue;
             else {
-                fprintf(stderr, "Read error.\n");
+                return SOCKET_ERROR;
             }
         }
         totRead += numRead;
         bufr += numRead;
     }
-   
-    // data read into inbuf, using bufr to move along buffer
-    return buffer;
+    // buffer has been filled with help of bufr
+    // changes should reflect in actual buffer b/c we took pointer to buffer as arg
+    return SOCKET_OK;
 }
 
 int is_in_quiz_set(int q_set[], int set_size, int q_num) {
@@ -215,30 +214,41 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
     }
 
     int num_correct = 0;
-
+    socket_status sock_status;
     // iteratively send the client quiz questions
     for (int i = 0; i < num_questions; i++) {
         char* question = quiz -> questions[i];
-        if (write_to_socket(socket_fd, question, write_bufsize) == -1) {
-            fprintf(stderr, "Invalid buffer size for write.\n");
+        sock_status = write_to_socket(socket_fd, question, write_bufsize);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to write to socket.\n");
             cleanup_quiz(quiz);
             exit(EXIT_FAILURE);
         }
 
-        char read_buf[read_bufsize];
-        const char* usr_answer = read_from_socket(socket_fd, read_buf, read_bufsize);
+        char answer[read_bufsize];
+        sock_status = read_from_socket(socket_fd, answer, read_bufsize);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to read from socket.\n");
+            cleanup_quiz(quiz);
+            exit(EXIT_FAILURE);
+        } else if (sock_status == SOCKET_CLOSED) {
+            cleanup_quiz(quiz);
+            fprintf(stderr, "Socket closed.\n");
+            exit(EXIT_FAILURE);
+        }
         const char* correct_answer = quiz -> answers[i];
         // allocate a buffer to hold response to send back to client
         char response[write_bufsize];
-        int compare = strcmp(usr_answer, correct_answer);
+        int compare = strcmp(answer, correct_answer);
         // comparisons have been off b/c usr_answer includes enter key which maps to ASCII val of 10
         printf("Result of comparing answers: %d\n", compare);
         if (compare == 0) {
             num_correct++;
             // snprintf safely copies string into buffer
             snprintf(response, sizeof(response), "Right Answer.");
-            if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
-                fprintf(stderr, "Invalid buffer size for write.\n");
+            sock_status = write_to_socket(socket_fd, response, write_bufsize);
+            if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+                fprintf(stderr, "Unable to write to socket.\n");
                 cleanup_quiz(quiz);
                 exit(EXIT_FAILURE);
             }
@@ -247,20 +257,24 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
             // explains purpose of using a buffer instead of char* 
             // can create a response that includes correct answer
             snprintf(response, sizeof(response), "Wrong answer. Right answer is %s", correct_answer);
-            if (write_to_socket(socket_fd, response, write_bufsize) == -1) {
-                fprintf(stderr, "Invalid buffer size for write.\n");
+            sock_status = write_to_socket(socket_fd, response, write_bufsize);
+            if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+                fprintf(stderr, "Unable to write to socket.\n");
+                cleanup_quiz(quiz);
                 exit(EXIT_FAILURE);
             }
         }
     }
-    // quiz, questions, and answers were dynamically allocated, perform cleanup
-    printf("End of quiz\n");
     char results[write_bufsize];
-    snprintf(results, sizeof(results), "Your quiz szore if %d/%d. Goodbye!\n", num_correct, num_questions);
-    if (write_to_socket(socket_fd, results, write_bufsize) == -1) {
-        fprintf(stderr, "Invalid buffer size for write.\n");
+    snprintf(results, sizeof(results), "Your quiz score is %d/%d. Goodbye!\n", num_correct, num_questions);
+    sock_status = write_to_socket(socket_fd, results, write_bufsize);
+    if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+        fprintf(stderr, "Unable to write to socket.\n");
+        cleanup_quiz(quiz);
         exit(EXIT_FAILURE);
     }
+
+    // quiz, questions, and answers were dynamically allocated, perform cleanup
     cleanup_quiz(quiz);
     return;
 }

@@ -19,7 +19,7 @@
 // reason: added null terminator character to write_to / read_from socket
 // preamble < 512 bytes so with char* approach write_to_socket was trying to access mem past
 // the literal (not valid for reading)
-static const char preamble[WRITE_BUFSIZE] = 
+static char preamble[WRITE_BUFSIZE] = 
     "Welcome to Unix Programming Quiz!\n"
     "The quiz comprises five questions posed you one after the other.\n"
     "You have only one attempt to answer a question.\n"
@@ -92,17 +92,26 @@ int main (int argc, char** argv) {
 
         // display client address
         display_client_addr((struct sockaddr*)&client_addr, addr_len);
-
+        socket_status sock_status;
         // write preamble to socket, handle invalid buffer size
-        if (write_to_socket(connect_fd, preamble, WRITE_BUFSIZE) == -1) {
-            fprintf(stderr, "Invalid buffer size for write.\n");
+        sock_status = write_to_socket(connect_fd, preamble, WRITE_BUFSIZE);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to write to socket.\n");
             exit(EXIT_FAILURE);
         }
 
         // client instructed to enter 'Y' or 'q', grab first character only
         // note: client side logic ensures only one character sent (no whitespace)
-        char read_buf[READ_BUFSIZE];
-        char* response = read_from_socket(connect_fd, read_buf, READ_BUFSIZE);
+        char response[READ_BUFSIZE];
+        sock_status = read_from_socket(connect_fd, response, READ_BUFSIZE);
+        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+            fprintf(stderr, "Unable to read from socket.\n");
+            exit(EXIT_FAILURE);
+        } else if (sock_status == SOCKET_CLOSED) {
+            // using goto to jump to closing connection socket
+            // a SOCKET_CLOSED status trying to read from client indicates client ended connection
+            goto close_connection_to_client;
+        }
         // response to preamble determines client's interest in quiz
         switch(tolower(response[0])) {
             // expected expression errors b/c case labels are not their own scope (fall under switch scope)
@@ -120,21 +129,18 @@ int main (int argc, char** argv) {
             }
             case 'q': {
                 // user does not want quiz, close connection socket
-                if (close(connect_fd) == -1) {
-                    fprintf(stderr, "Close error.\n");
-                    exit(EXIT_FAILURE);
-                }
+                goto close_connection_to_client;
                 break;
             }
             default:
                 break;
         }
-        // write quiz questions to client
-        // close connection socket        
-        if (close(connect_fd) == -1) {
-            fprintf(stderr, "Close error.\n");
-            exit(EXIT_FAILURE);
-        }
+        // close socket connection to client
+        close_connection_to_client:
+            if (close(connect_fd) == -1) {
+                fprintf(stderr, "Close error.\n");
+                exit(EXIT_FAILURE);
+            }
     }
     // close listening socket
     if (close(listen_fd) == -1) {
