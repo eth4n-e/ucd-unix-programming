@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/socket.h>
+#include <sys/select.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -24,7 +25,7 @@ int main(int argc, char** argv) {
     int client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd == -1) {
         fprintf(stderr, "socket() error.\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     // Step 2: connect socket to server, similar to server bind phase 
@@ -71,14 +72,8 @@ int main(int argc, char** argv) {
             
             // close the client's socket if they do not want to take quiz
             if (first == 'q') {
-                if (close(client_fd) == -1) {
-                    fprintf(stderr, "Close error.\n");
-                    exit(EXIT_FAILURE);
-                }
-                // mark connection as closed
-                client_fd = -1;
                 free(response);
-                exit(EXIT_SUCCESS);
+                goto close_connection_to_server;
             }
             printf("\n");
             free(response);
@@ -88,45 +83,61 @@ int main(int argc, char** argv) {
     // data transfer loop follows same logic as server
     // loop handles quiz interaction between server
     for(;;) {
-        char bufr[READ_BUFSIZE];
-        sock_status = read_from_socket(client_fd, bufr, READ_BUFSIZE);
-        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
-            fprintf(stderr, "Unable to read from socket.\n");
+        // initialize a file descriptor set to monitor client_fd and / or stdin
+        fd_set readfds;
+        FD_ZERO(&readfds); // initialize set
+        FD_SET(client_fd, &readfds); // add client_fd to readfds set
+        FD_SET(STDIN_FILENO, &readfds); // add stdin to readfds set
+       
+        // determine the largest fd
+        int max_fd = (client_fd > STDIN_FILENO) ? client_fd : STDIN_FILENO;
+        // select(int num_fds, read_set, ...)
+        // method checks the first num_fds [0, max_fd] in each set
+        // select method blocks program execution until the fds are ready
+        // ... select will unblock when: data arrives to fd being watched, socket closes, etc.
+        // returns the number of 'ready' fds (e.g. available to be read from, written to, etc.)
+        int ready = select(max_fd+1, &readfds, NULL, NULL, NULL);
+        if (ready == -1) {
+            fprintf(stderr, "Unable to perform select.\n");
             exit(EXIT_FAILURE);
-        } else if (sock_status == SOCKET_CLOSED) {
-            goto close_connection_to_server;
         }
-    
-        printf("%s\n", bufr);
-
-        char* answer = NULL;
-        size_t len;
-        if (getline(&answer, &len, stdin) != -1) {
-            // replace newline character with null terminator
-            // newline interferes with strcmp on server
-            // strcspn returns length of string up to first occurrence of string arg
-            answer[strcspn(answer, "\n")] = '\0';
-            sock_status = write_to_socket(client_fd, answer, WRITE_BUFSIZE);
+        
+        // select updates the set to include only those fds ready for an operation
+        // FD_ISSET(fd, set) checks if fd is in set (equivalent to being ready)
+        // select removed need for two read checks b/c select will catch when client_fd 
+        // is ready to be read from and add it to readfds. And read checks had same structure
+        if (FD_ISSET(client_fd, &readfds)) {
+            char bufr[READ_BUFSIZE];
+            sock_status = read_from_socket(client_fd, bufr, READ_BUFSIZE);
+            printf("read status: %d\n", sock_status);
             if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
-                fprintf(stderr, "Unable to write to socket.\n");
-                free(answer);
+                fprintf(stderr, "Unable to read from socket.\n");
                 exit(EXIT_FAILURE);
+            } else if (sock_status == SOCKET_CLOSED) {
+                goto close_connection_to_server;
             }
+    
+            printf("%s\n", bufr);
         }
-        // reminder that getline dynamically allocates answer, my responsibility to free
-        free(answer);
-        // read result from server (whether client correct or not)
-        // able to reuse bufr b/c method clears buffer before reading
-        sock_status = read_from_socket(client_fd, bufr, READ_BUFSIZE);
-        if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
-            fprintf(stderr, "Unable to read from socket.\n");
-            exit(EXIT_FAILURE);
-        } else if (sock_status == SOCKET_CLOSED) {
-            goto close_connection_to_server;
+        
+        if (FD_ISSET(STDIN_FILENO, &readfds)) {
+            char* answer = NULL;
+            size_t len;
+            if (getline(&answer, &len, stdin) != -1) {
+                // replace newline character with null terminator
+                // newline interferes with strcmp on server
+                // strcspn returns length of string up to first occurrence of string arg
+                answer[strcspn(answer, "\n")] = '\0';
+                sock_status = write_to_socket(client_fd, answer, WRITE_BUFSIZE);
+                if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
+                    fprintf(stderr, "Unable to write to socket.\n");
+                    free(answer);
+                    exit(EXIT_FAILURE);
+                }
+            }
+            // reminder that getline dynamically allocates answer, my responsibility to free
+            free(answer);
         }
-        printf("%s\n", bufr);
-        // for spacing purposes
-        printf("\n");
     }
 
     close_connection_to_server:

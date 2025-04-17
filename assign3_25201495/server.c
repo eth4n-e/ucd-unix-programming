@@ -137,6 +137,7 @@ int main (int argc, char** argv) {
         }
         // close socket connection to client
         close_connection_to_client:
+            printf("Closing connection to client\n");
             if (close(connect_fd) == -1) {
                 fprintf(stderr, "Close error.\n");
                 exit(EXIT_FAILURE);

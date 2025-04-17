@@ -9,7 +9,6 @@
 #include "utils.h"
 #define NUM_QUIZ_QUESTIONS 5    /* Number of quiz questions */
 
-/*** SERVER ***/
 int generate_random_num(int bound) {
     if (bound <= 0) {
         fprintf(stderr, "Bound must exceed 0.\n");
@@ -206,7 +205,6 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
     }
 
     int num_questions = quiz -> num_questions;
-    printf("Num questions: %d\n", num_questions);
     if (num_questions <= 0) {
         fprintf(stderr, "Error: quiz size must be greater than 0.\n");
         cleanup_quiz(quiz); 
@@ -240,8 +238,6 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
         // allocate a buffer to hold response to send back to client
         char response[write_bufsize];
         int compare = strcmp(answer, correct_answer);
-        // comparisons have been off b/c usr_answer includes enter key which maps to ASCII val of 10
-        printf("Result of comparing answers: %d\n", compare);
         if (compare == 0) {
             num_correct++;
             // snprintf safely copies string into buffer
@@ -278,4 +274,3 @@ void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) 
     cleanup_quiz(quiz);
     return;
 }
-/*** SERVER ***/
