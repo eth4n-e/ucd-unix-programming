@@ -200,77 +200,91 @@ void cleanup_quiz(Quiz* quiz) {
 void start_quiz(int socket_fd, Quiz* quiz, int write_bufsize, int read_bufsize) {
     if (quiz == NULL) {
         fprintf(stderr, "Unable to begin non-existent quiz.\n");
-        cleanup_quiz(quiz);
-        return;
+        goto cleanup;
     }
 
     int num_questions = quiz -> num_questions;
     if (num_questions <= 0) {
         fprintf(stderr, "Error: quiz size must be greater than 0.\n");
-        cleanup_quiz(quiz); 
-        return;
+        goto cleanup;
     }
 
     int num_correct = 0;
     socket_status sock_status;
+    // defining answer, response outside loop scope so mem can be freed in cleanup if necessary
+    char* answer = NULL;
+    char* response = NULL;
+    char* results = NULL;
     // iteratively send the client quiz questions
     for (int i = 0; i < num_questions; i++) {
         char* question = quiz -> questions[i];
         sock_status = write_to_socket(socket_fd, question, write_bufsize);
         if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
             fprintf(stderr, "Unable to write to socket.\n");
-            cleanup_quiz(quiz);
-            exit(EXIT_FAILURE);
+            goto cleanup;
         }
 
-        char answer[read_bufsize];
+        answer = malloc(read_bufsize);
+        if (answer == NULL) {
+            goto cleanup;
+        }
         sock_status = read_from_socket(socket_fd, answer, read_bufsize);
         if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
             fprintf(stderr, "Unable to read from socket.\n");
-            cleanup_quiz(quiz);
-            exit(EXIT_FAILURE);
+            goto cleanup;
         } else if (sock_status == SOCKET_CLOSED) {
-            cleanup_quiz(quiz);
-            fprintf(stderr, "Socket closed.\n");
-            exit(EXIT_FAILURE);
+            fprintf(stderr, "Connection to peer closed.\n");
+            goto cleanup;
         }
         const char* correct_answer = quiz -> answers[i];
         // allocate a buffer to hold response to send back to client
-        char response[write_bufsize];
+        response = malloc(write_bufsize);
+        if (response == NULL) {
+            goto cleanup;
+        }
         int compare = strcmp(answer, correct_answer);
         if (compare == 0) {
             num_correct++;
             // snprintf safely copies string into buffer
-            snprintf(response, sizeof(response), "Right Answer.");
+            snprintf(response, write_bufsize, "Right Answer.");
             sock_status = write_to_socket(socket_fd, response, write_bufsize);
             if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
                 fprintf(stderr, "Unable to write to socket.\n");
-                cleanup_quiz(quiz);
-                exit(EXIT_FAILURE);
+                goto cleanup;
             }
         } else {
             // snprintf can be used to make parameterized strings
             // explains purpose of using a buffer instead of char* 
             // can create a response that includes correct answer
-            snprintf(response, sizeof(response), "Wrong answer. Right answer is %s", correct_answer);
+            snprintf(response, write_bufsize, "Wrong answer. Right answer is %s", correct_answer);
             sock_status = write_to_socket(socket_fd, response, write_bufsize);
             if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
                 fprintf(stderr, "Unable to write to socket.\n");
-                cleanup_quiz(quiz);
-                exit(EXIT_FAILURE);
+                goto cleanup;
             }
         }
+        // de-allocate answer / response after every iteration to ensure I am not overwriting exisitng memory
+        free(answer);
+        free(response);
+        answer = NULL;
+        response = NULL;
     }
-    char results[write_bufsize];
-    snprintf(results, sizeof(results), "Your quiz score is %d/%d. Goodbye!\n", num_correct, num_questions);
+    results = malloc(write_bufsize);
+    if (results == NULL) {
+        goto cleanup;
+    }
+    snprintf(results, write_bufsize, "Your quiz score is %d/%d. Goodbye!\n", num_correct, num_questions);
     sock_status = write_to_socket(socket_fd, results, write_bufsize);
     if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
         fprintf(stderr, "Unable to write to socket.\n");
-        cleanup_quiz(quiz);
-        exit(EXIT_FAILURE);
+        goto cleanup;
     }
 
     // quiz, questions, and answers were dynamically allocated, perform cleanup
-    cleanup_quiz(quiz);
+    cleanup:
+        if (answer) free(answer);
+        if (response) free(response);
+        if (results) free(results);
+        cleanup_quiz(quiz);
     return;
 }

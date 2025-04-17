@@ -109,7 +109,6 @@ int main(int argc, char** argv) {
         if (FD_ISSET(client_fd, &readfds)) {
             char bufr[READ_BUFSIZE];
             sock_status = read_from_socket(client_fd, bufr, READ_BUFSIZE);
-            printf("read status: %d\n", sock_status);
             if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
                 fprintf(stderr, "Unable to read from socket.\n");
                 exit(EXIT_FAILURE);

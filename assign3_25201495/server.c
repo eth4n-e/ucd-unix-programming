@@ -30,7 +30,7 @@ static char preamble[WRITE_BUFSIZE] =
 int main (int argc, char** argv) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <host address> <port number>\n", argv[0]);
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
 
     char* server_ip = argv[1];
@@ -42,7 +42,7 @@ int main (int argc, char** argv) {
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_fd == -1) {
         fprintf(stderr, "socket() error.\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     // Step 2: bind socket to specified address
     // sockaddr_in is address structure for an AF_INET (IPv4) domain type
@@ -63,7 +63,7 @@ int main (int argc, char** argv) {
     
     if (ret_code == -1) {
         fprintf(stderr, "bind() error.\n");
-        exit(-1);
+        exit(EXIT_FAILURE);
     }
     // Step 3: listen to incoming connections
     // backlog limits number of pending connections
@@ -88,6 +88,7 @@ int main (int argc, char** argv) {
 
         if (connect_fd == -1) {
             fprintf(stderr, "accept() error.\n");
+            goto close_connection_to_client;
         }
 
         // display client address
@@ -97,7 +98,7 @@ int main (int argc, char** argv) {
         sock_status = write_to_socket(connect_fd, preamble, WRITE_BUFSIZE);
         if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
             fprintf(stderr, "Unable to write to socket.\n");
-            exit(EXIT_FAILURE);
+            goto close_connection_to_client; 
         }
 
         // client instructed to enter 'Y' or 'q', grab first character only
@@ -106,7 +107,7 @@ int main (int argc, char** argv) {
         sock_status = read_from_socket(connect_fd, response, READ_BUFSIZE);
         if (sock_status == SOCKET_INVALID || sock_status == SOCKET_ERROR) {
             fprintf(stderr, "Unable to read from socket.\n");
-            exit(EXIT_FAILURE);
+            goto close_connection_to_client;
         } else if (sock_status == SOCKET_CLOSED) {
             // using goto to jump to closing connection socket
             // a SOCKET_CLOSED status trying to read from client indicates client ended connection
@@ -137,7 +138,7 @@ int main (int argc, char** argv) {
         }
         // close socket connection to client
         close_connection_to_client:
-            printf("Closing connection to client\n");
+            printf("Closing connection to client.\n");
             if (close(connect_fd) == -1) {
                 fprintf(stderr, "Close error.\n");
                 exit(EXIT_FAILURE);
