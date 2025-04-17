@@ -7,6 +7,6 @@
 
 #### Assignment 2: _Implementation of basic shell with behavior same as Bash_
 
-#### Assignment 3: _Implementation of an Iterative TCP Serverto quiz client_s
+#### Assignment 3: _Implementation of an Iterative TCP Server to quiz clients_
 
 #### Assignment 4: 
