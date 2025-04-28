@@ -6,6 +6,16 @@ source ./assignment4-data/stage4.sh.inc
 source ./assignment4-data/grades.sh.inc
 source ./assignment4-data/mincredits.sh.inc
 
+# declaration of variables used throughout script
+help_flag="--help"
+# reading user input
+num_args=$#
+if [ num_args -le 1 -o "$1" == "$help_flag" ]; then
+    echo "Correct usage: bsctranscript.sh <I|NI>
+    I for internship in stage 3
+    NI for no internship in stage 3"
+fi
+
 # Notes:
 # Script takes an argument
 # If no args, invalid args, or --help provided, must print correct usage
