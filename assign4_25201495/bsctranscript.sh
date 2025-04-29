@@ -9,20 +9,56 @@ source ./assignment4-data/mincredits.sh.inc
 # declaration of functions used throughout script
 
 # input: array of courses
-# function add_credit_hours {
+function add_credit_hours {
+    # create a local variable for array passed to function 
+    local courses=("$@")
+    local credit_hours=0
 
-# }
+    # "${!courses[@]} gives list of indices
+    for i in "${!courses[@]}"; do
+        if [ $((i%3)) -eq 2 ]; then
+            # note: a courses credit hours falls at i % 3 == 2
+            # index in array where i is index
+            credit_hours=$((credit_hours + courses[i]))
+        fi
+    done
+
+    return "$credit_hours"
+}
 
 # declaration of variables used throughout script
 help_flag="--help"
 num_args="$#"
+stage1_min_credits=55
+stage2_min_credits=50
+stage3_min_credits=50
+stage4_min_credits=60
+stages=(1 2 3 4)
 
 # reading user input
 if [ "$num_args" -lt "1" -o "$1" == "$help_flag" ]; then
     echo -e "Correct usage: bsctranscript.sh <I|NI>\nI for internship in stage 3\nNI for no internship in stage 3"
 fi
 
-echo "${stage1core[0]}" "${stage1core[1]}" 
+# dynamically reference array name based on stage number
+for stage in "${stages[@]}"; do
+    local stage_ref="$stage${stage}core"
+    local stage_min_cred_ref="$stage${stage}_min_credits"
+    # uses namerefs - creates reference to variable whose name stored in stage_ref
+    declare -n cur_stage="$stage_ref"
+    declare -n cur_stage_min_cred="$stage_min_cred_ref"
+
+    add_credit_hours "${cur_stage}"
+    credit_hours="$?"
+
+    # student needs more credits, randomly select from electives at that stage
+    if [ "$credit_hours" -lt "$cur_stage_min_cred" ]; then
+        
+    fi
+
+    # print current stage transcript
+done
+
 
 # Notes:
 # Script takes an argument
