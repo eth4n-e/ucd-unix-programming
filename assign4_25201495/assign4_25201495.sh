@@ -1,7 +1,20 @@
 #!/opt/homebrew/bin/bash
+# Name: Ethan Epperson
+# Student Number: 25201495
+# Email: ethan.epperson@ucdconnect.ie
+# Usage:
 # NOTE: bash script requires bash version>4.3 because use of namerefs
 # NOTE: my homebrew installed bash version is located as /opt/homebrew/bin/bash 
 # NOTE: and the homebrew installed version is greater than 4.3
+# Run with: $ ./assign4_25201495.sh <I|NI>
+# Script takes in an argument I or NI which specifies whether Industry Internship is taken as an elective in Stage 3
+# for each stage the script:
+# - populates a global list of courses
+# - checks if more courses need to be taken
+# - generates electives to take if necessary
+# - randomly generates letter grades and grade points for courses
+# - displays all courses taken within the stage
+# - sums the grade point total across all stages
 source ./assignment4-data/stage1.sh.inc
 source ./assignment4-data/stage2.sh.inc
 source ./assignment4-data/stage3.sh.inc
