@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/opt/homebrew/bin/bash
+# NOTE: bash script requires bash version>4.3 because use of namerefs
+# NOTE: my homebrew installed bash version is located as /opt/homebrew/bin/bash 
+# NOTE: and the homebrew installed version is greater than 4.3
 source ./assignment4-data/stage1.sh.inc
 source ./assignment4-data/stage2.sh.inc
 source ./assignment4-data/stage3.sh.inc
@@ -15,22 +18,22 @@ STAGE2_MIN_CREDITS=${minc[1]}
 STAGE3_MIN_CREDITS=${minc[2]}
 STAGE4_MIN_CREDITS=${minc[3]}
 STAGES=(1 2 3 4)
+COURSES=()
+CREDIT_HOURS=0
 GRADE_POINT_TOTAL=0
 INTERNSHIP=0
 declare -a internship=("${stage3elective[0]}" "${stage3elective[1]}" "${stage3elective[2]}")
 
 ### FUNCTIONS USED THROUGHOUT SCRIPT
-# input: element, array
+# input: element 
 # output: true / false if array contains element
-function contains_element {
-    echo in contains element
-    local -n element="$1"
-    shift
-    local -n array="$2"
-    for (( i = 0; i < "${#array[@]}"; i+=3 )) do
+function courses_contains_element {
+    local element="$1"
+    local courses_len="${#COURSES[@]}"
+    for (( i=0; i<$courses_len; i+=3 )) do
         # module codes appear every 3 indices
         # check if they match
-        if [[ "${element[0]}" == "${array[i]}" ]]; then
+        if [[ "$element" == "${COURSES[i]}" ]]; then
             return 0  # true
         fi
     done
@@ -39,40 +42,36 @@ function contains_element {
 
 # input: array of courses
 function add_credit_hours {
-    echo in add credit hours
     # create a local variable for array passed to function 
-    local -n courses="$1"
-    local credit_hours=0
+    local courses=("$@")
 
     # note: a courses credit hours falls at i % 3 == 2
     # index in array where i is index
-    for ((i=2; i < "${#courses[@]}"; i+=3 )) do
+    for (( i=2; i<"${#courses[@]}"; i+=3 )) do
         # add credit hours
-        credit_hours=$((credit_hours + courses[i]))
+        CREDIT_HOURS=$((CREDIT_HOURS + courses[i]))
     done
 
-    return "$credit_hours"
+    return "$CREDIT_HOURS"
 }
 
 # input: letter grade variable to populate 
 # output: letter grade
-function generate_letter_grade() {
-    echo in generate letter grade
-    local -n letter_grade="$1"
+function generate_letter_grade {
     # grades is organized such that a grade, grade point combo represents 2 elements
     # there are 5 grade, grade point pairs
     # grade_row represents a pair number (e.g. pair 4 = D 2)
     # multiply by ENTRIES_PER_GRADE to select the grade letter
-    num_grades=$(("${#grades[@]}" / "$ENTRIES_PER_GRADE"))
-    grade_row=$(($RANDOM % "$num_grades"))
-    letter_grade_idx=$(("$grade_row" * "$ENTRIES_PER_GRADE"))
+    local num_grades=$(("${#grades[@]}" / "$ENTRIES_PER_GRADE"))
+    local grade_row=$(($RANDOM % "$num_grades"))
+    local letter_grade_idx=$(("$grade_row" * "$ENTRIES_PER_GRADE"))
     # select the letter grade
-    letter_grade="${grades[$letter_grade_idx]}"
+    local letter_grade="${grades[$letter_grade_idx]}"
+    echo "$letter_grade"
 }
 
 # output: grade point
-function generate_grade_point() {
-    echo in generate grade point
+function generate_grade_point {
     # grades is organized such that a grade, grade point combo represents 2 elements
     # there are 5 grade, grade point pairs
     # grade_row represents a pair number (e.g. pair 4 = D 2)
@@ -84,99 +83,107 @@ function generate_grade_point() {
 }
 
 # input: name of elective array to populate, name of list of electives to select from
-# output: none, variables are modified with use of namerefs
+# output: return starting index of an elective record
 function select_elective {
-    echo in select_elective
-    local -n elective=$1
-    local -n electives=$2
+    local electives=("$@")
     # 3 entries per course, divide to get number of courses
     local num_electives=$(("${#electives[@]}" / "$ENTRIES_PER_COURSE"))
     # generate random index to retrieve elective
-    local rand_idx=$((RANDOM % "$num_electives"))
+    local elec_idx=$((RANDOM % "$num_electives"))
 
-    # populate the elective
-    elective+=("${electives[rand_idx]}" "${electives[rand_idx+1]}" "${electives[rand_idx+2]}")
+    return $(("$elec_idx" * $ENTRIES_PER_COURSE))
 }
 
 # input: name of an elective tuple, name of courses list
-function generate_elective() {
-    echo in generate_elective
+function generate_elective {
     # create namerefs to arguments, changes made within function reflect in that variable outside
-    local -n electives="$1"
-    shift
-    local -n courses="$2"
+    local electives=("$@")
     local elective=()
+    local elec_idx
+    local module
+    local title
+    local cred
     # pass the name of the array to populate 
     # select_elective creates a nameref so that changes made in function reflect in variable
-    select_elective elective "$1" 
+    select_elective "${electives[@]}"
+    elec_idx="$?"
+    # populate the elective
+    module="${electives[elec_idx]}"
+    title="${electives[elec_idx+1]}"
+    cred="${electives[elec_idx+2]}"
+    elective=("$module" "$title" "$cred")
     # generate unique electives
-    while [ contains_element "$1" "$2" ]; do
+    while courses_contains_element "$module"; do
         # reset elective to re-populate it
-        elective=()
-        select_elective elective "$1" 
+        select_elective "${electives[@]}"
+        elec_idx="$?"
+
+        module="${electives[elec_idx]}"
+        title="${electives[elec_idx+1]}"
+        cred="${electives[elec_idx+2]}"
+        elective=("$module" "$title" "$cred")
     done
     # add the elective to our course list
-    courses+=("${elective[@]}")
+    COURSES+=("${elective[@]}")
+    CREDIT_HOURS=$((CREDIT_HOURS + "${elective[2]}"))
 }
 
 # input: stage number
 # output: list of courses to take
-function populate_stage() {
-    echo in populate stage
+function populate_stage {
     local stage="$1"
-    local -n courses="$2"
     # dynamically reference array name based on stage number
-    local stage_core_name="$stage${stage}core"
-    local stage_min_cred_name="$STAGE${stage}_MIN_CREDITS"
+    local stage_core_name="stage${stage}core"
+    local stage_elec_name="stage${stage}elective"
+    local stage_min_cred_name="STAGE${stage}_MIN_CREDITS"
     # uses namerefs - creates reference to variable whose name stored in stage_..._name
     declare -n cur_stage_core="$stage_core_name"
+    declare -n cur_stage_elec="$stage_elec_name"
     declare -n cur_stage_min_cred="$stage_min_cred_name"
 
-    add_credit_hours "$stage_core_name" 
-    credit_hours="$?"
+    # populate courses with core requirements
+    COURSES+=("${cur_stage_core[@]}")
+    # calculate accumulated credit hours from core courses
+    add_credit_hours "${cur_stage_core[@]}" 
+    CREDIT_HOURS="$?"
 
     # internship selected
-    if [ "$INTERNSHIP" -eq 1 ] && [ "$stage" -eq 3 ]; then
-        courses+=("$internship")
+    if [ "$INTERNSHIP" -eq 1 ] && [ "$stage" == "3" ]; then
+        COURSES+=("${internship[@]}")
+        CREDIT_HOURS=$((CREDIT_HOURS + "${internship[2]}"))
     fi
 
     # student needs more credits, randomly select from electives at that stage
-    while [ "$credit_hours" -lt "$cur_stage_min_cred" ]; do
-        local elective=()
-        # pass original variable name so that invoked function can access
-        generate_elective elective "$stage_core_name" 
-        courses+="${elective[@]}"
+    while [ "$CREDIT_HOURS" -lt "$cur_stage_min_cred" ]; do
+        # generate a unique elective from inputted list to add to course list
+        generate_elective "${cur_stage_elec[@]}"
     done
 }
 
 # input: stage number, list of courses being taken
-function print_stage() {
-    echo in print stage
+function print_stage {
     local stage="$1"
-    shift
-    local courses=("$@")
-    local counter=0
-    local num_courses=$(("${#courses[@]}"/"$ENTRIES_PER_COURSE"))
+    local num_courses=$(("${#COURSES[@]}"/"$ENTRIES_PER_COURSE"))
 
     echo Stage $stage
-    echo -e Module Code\t\tCourse Name\t\tCredit Hours\t\tGrade Point
+    echo Module, Title, Cred, Grade, G.P
     for (( course_num=0; course_num < "$num_courses"; course_num++ ));
     do
         # each record has 5 entries
         # so record_idx is at record_num * 5
         # e.g. record 1 starts at index 5
         local start_idx=$(("$course_num" * "$ENTRIES_PER_COURSE"))
-        local module_code=${courses[$start_idx]}
-        local course_name=${courses[$((start_idx+1))]}
-        local credit_hours=${courses[$((start_idx+2))]}
+        local module_code="${COURSES[start_idx]}"
+        local course_name="${COURSES[start_idx+1]}"
+        local credit_hours="${COURSES[start_idx+2]}"
         # generate grade and grade point for each course
-        local letter_grade
-        generate_letter_grade letter_grade
+        # use command substitution to capture echoed value
+        local letter_grade=$(generate_letter_grade)
         generate_grade_point
         local grade_point="$?"
         # update grade point total
-        $((GRADE_POINT_TOTAL+=grade_point))
-        echo $module_code $course_name $credit_hours $letter_grade $grade_point
+        GRADE_POINT_TOTAL=$(("$GRADE_POINT_TOTAL" + "$grade_point"))
+        echo "$module_code", "$course_name", "$credit_hours", "$letter_grade", "$grade_point"
     done
 
     return
@@ -195,40 +202,13 @@ if [ "$1" == "I" ]; then
 fi
 
 # for each stage, populate and display that stage
-for stage in ${stages[@]}; do
-    courses=()
-    populate_stage "$stage"
-    print_stage "$stage" "${courses[@]}"
+for stage in ${STAGES[@]}; do
+    populate_stage "$stage" 
+    print_stage "$stage" 
+    echo -e "\n"
+    # reset courses and credit hours for next stage
+    COURSES=()
+    CREDIT_HOURS=0
 done
 
 echo Total grade point score = "$GRADE_POINT_TOTAL".
-
-# Notes:
-# Script takes an argument
-# If no args, invalid args, or --help provided, must print correct usage
-# if grade F is selected, pick another elective 
-
-# Outline:
-# read user input to determine Internship / No Internship for stage 3
-# output correct usage if script incorrectly invoked
-# create a function that adds up the credit hours for modules in a list
-# create constants for the minimum number of credit hours for each stage
-# have a loop that runs for as many stages that exist
-# in the loop:
-# maintain a list of courses that the student will take
-# add up the credit hours for core courses & add to list of courses
-# call a function to check if the minimum number of credit hours is met
-# if so, display the modules
-# if not, randomly select modules from the electives at 
-# that stage and add to the list
-# for each course in the list randomly generate a grade / grade point
-# maintain a variable that keeps track of the grade point score
-# end of loop: display grade point total
-
-# what I need to understand:
-# arrays
-# looping
-# reading input / evaluating arguments
-# writing functions
-# printing / echoing
-# arithmetic
